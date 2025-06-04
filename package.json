@@ -1,7 +1,7 @@
 {
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
-  "description": "Visual annotation tool for YOLO object detection datasets with bounding box editing",
+  "description": "Visual annotation tool for YOLO object detection datasets",
   "version": "1.0.0",
   "publisher": "your-publisher-name",
   "author": {
@@ -48,7 +48,7 @@
     "commands": [
       {
         "command": "yolo-annotator.start",
-        "title": "Start YOLO Annotation Editor",
+        "title": "Open YOLO Annotator",
         "category": "YOLO Annotator",
         "icon": "$(pencil)"
       }
@@ -63,7 +63,8 @@
       ],
       "commandPalette": [
         {
-          "command": "yolo-annotator.start"
+          "command": "yolo-annotator.start",
+          "title": "YOLO Annotator: Open Setup Window"
         }
       ]
     },
@@ -87,7 +88,8 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "debug-buffer": "node --trace-deprecation --trace-warnings npm run compile"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
