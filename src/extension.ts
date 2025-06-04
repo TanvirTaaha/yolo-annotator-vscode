@@ -114,7 +114,7 @@ async function loadImages(): Promise<void> {
     try {
         const files = await fs.promises.readdir(state.imagesDirPath);
         state.allImagesInDir = files
-            .filter(f => ['.jpg', '.png', '.jpeg'].includes(path.extname(f).toLowerCase()))
+            .filter(f => ['.jpg', '.png', '.jpeg', '.JPG', '.JPEG', '.PNG'].includes(path.extname(f)))
             .sort(); // Sort for consistent order
 
         if (state.allImagesInDir.length === 0) {
@@ -136,7 +136,10 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<voi
         vscode.ViewColumn.One,
         {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(state.imagesDirPath)],
+            localResourceRoots: [
+                vscode.Uri.file(state.imagesDirPath),
+                vscode.Uri.file(path.join(context.extensionPath, 'media'))
+            ],
             retainContextWhenHidden: true
         }
     );
@@ -312,18 +315,48 @@ async function sendImageDataToWebview(imageIndex: number): Promise<void> {
         return;
     }
 
-    const imageWebviewUri = state.webviewPanel.webview.asWebviewUri(imageFileOnDisk);
-    const parsedLabels = await loadLabelsForImage(imageName);
+    // Convert image to base64 for remote compatibility
+    try {
+        const imageBuffer = await fs.promises.readFile(imageFileOnDisk.fsPath);
+        const base64Image = imageBuffer.toString('base64');
+        const mimeType = getMimeType(imageName);
+        const dataUri = `data:${mimeType};base64,${base64Image}`;
+        
+        const parsedLabels = await loadLabelsForImage(imageName);
 
-    state.webviewPanel.webview.postMessage({
-        command: 'loadImage',
-        imageName: imageName,
-        imageUri: imageWebviewUri.toString(),
-        labels: parsedLabels,
-        classes: state.classNames,
-        currentIndex: imageIndex,
-        totalImages: state.allImagesInDir.length
-    });
+        state.webviewPanel.webview.postMessage({
+            command: 'loadImage',
+            imageName: imageName,
+            imageUri: dataUri, // Use base64 instead of webview URI
+            labels: parsedLabels,
+            classes: state.classNames,
+            currentIndex: imageIndex,
+            totalImages: state.allImagesInDir.length
+        });
+    } catch (error) {
+        console.error(`Error reading image file: ${imageFileOnDisk.fsPath}`, error);
+        state.webviewPanel.webview.postMessage({ 
+            command: 'error', 
+            message: `Failed to read image file: ${imageName}` 
+        });
+    }
+}
+
+function getMimeType(filename: string): string {
+    const ext = path.extname(filename).toLowerCase();
+    switch (ext) {
+        case '.jpg':
+        case '.jpeg':
+            return 'image/jpeg';
+        case '.png':
+            return 'image/png';
+        case '.gif':
+            return 'image/gif';
+        case '.webp':
+            return 'image/webp';
+        default:
+            return 'image/jpeg';
+    }
 }
 
 async function loadLabelsForImage(imageName: string): Promise<YOLOLabel[]> {
@@ -384,7 +417,7 @@ function getWebviewContent(webview: vscode.Webview): string {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: https:; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOLO Annotation Editor</title>
     <style>
@@ -513,7 +546,7 @@ function getWebviewContent(webview: vscode.Webview): string {
         }
         
         #editFormContainer select, 
-        #editFormContainer input[type="text"] { 
+        #editFormContainer input[type="number"] { 
             width: calc(100% - 12px); 
             padding: 8px; 
             margin-bottom: 12px; 
@@ -524,7 +557,7 @@ function getWebviewContent(webview: vscode.Webview): string {
         }
         
         #editFormContainer select:focus, 
-        #editFormContainer input[type="text"]:focus {
+        #editFormContainer input[type="number"]:focus {
             border-color: #007acc;
             outline: none;
         }
@@ -588,7 +621,7 @@ function getWebviewContent(webview: vscode.Webview): string {
     <div class="container">
         <div class="image-panel">
             <div class="image-container">
-                <img id="mainImage" src="" alt="Annotation Image">
+                <img id="mainImage" src="" alt="Annotation Image" crossorigin="anonymous">
                 <canvas id="canvas"></canvas>
             </div>
         </div>
@@ -702,12 +735,12 @@ function getWebviewContent(webview: vscode.Webview): string {
                     redrawCanvas();
                 };
                 
-                imgElement.onerror = function() {
-                    console.error('Failed to load image:', data.imageUri);
+                imgElement.onerror = function(e) {
+                    console.error('Failed to load image:', data.imageUri, e);
                     showStatusMessage(\`Failed to load image: \${currentImageName}\`, 'error');
                 };
 
-                console.log('Setting image src to:', data.imageUri);
+                console.log('Setting image src to base64 data');
                 imgElement.src = data.imageUri;
                 
             } catch (error) {
@@ -717,7 +750,6 @@ function getWebviewContent(webview: vscode.Webview): string {
         }
 
         function setupCanvas() {
-            const rect = imgElement.getBoundingClientRect();
             canvas.width = imgElement.naturalWidth;
             canvas.height = imgElement.naturalHeight;
             canvas.style.width = imgElement.offsetWidth + 'px';
