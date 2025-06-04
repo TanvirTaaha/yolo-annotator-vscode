@@ -94,4 +94,4 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-Report issues at: [https://github.com/TanvirTaaha/yolo-annotator-vscode/issues]
+Report issues at: [https://github.com/TanvirTaaha/yolo-annotator-vscode/issues]("https://github.com/TanvirTaaha/yolo-annotator-vscode/issues")
