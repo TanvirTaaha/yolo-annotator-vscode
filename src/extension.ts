@@ -20,6 +20,13 @@ interface ExtensionState {
     webviewPanel: vscode.WebviewPanel | undefined;
 }
 
+interface DroppedFile {
+    name: string;
+    path: string;
+    type: 'image' | 'label' | 'classes';
+    content?: string;
+}
+
 // Store extension state globally within the activate function's scope
 let state: ExtensionState = {
     allImagesInDir: [],
@@ -35,7 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     const disposable = vscode.commands.registerCommand('yolo-annotator.start', async () => {
         try {
-            await initializeAnnotationSession(context);
+            // Create webview panel immediately without requiring directory selection
+            await createInitialWebviewPanel(context);
         } catch (error) {
             console.error('Error starting YOLO Annotator:', error);
             vscode.window.showErrorMessage(`Failed to start YOLO Annotator: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -43,6 +51,48 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(disposable);
+}
+
+async function createInitialWebviewPanel(context: vscode.ExtensionContext): Promise<void> {
+    // Reset state for a new session
+    resetState();
+
+    // Create webview panel without requiring initial setup
+    state.webviewPanel = vscode.window.createWebviewPanel(
+        'yoloAnnotator',
+        'YOLO Annotation Editor',
+        vscode.ViewColumn.One,
+        {
+            enableScripts: true,
+            localResourceRoots: [
+                vscode.Uri.file(path.join(context.extensionPath, 'media'))
+            ],
+            retainContextWhenHidden: true
+        }
+    );
+
+    // Handle webview messages
+    state.webviewPanel.webview.onDidReceiveMessage(
+        async message => {
+            try {
+                await handleWebviewMessage(message, context);
+            } catch (error) {
+                console.error('Error handling webview message:', error);
+                vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        },
+        undefined,
+        context.subscriptions
+    );
+
+    // Generate webview HTML
+    state.webviewPanel.webview.html = getWebviewContent(state.webviewPanel.webview);
+
+    // Handle panel disposal
+    state.webviewPanel.onDidDispose(() => {
+        resetState();
+        console.log('YOLO Annotator panel disposed and state reset.');
+    }, null, context.subscriptions);
 }
 
 async function initializeAnnotationSession(context: vscode.ExtensionContext): Promise<void> {
@@ -130,6 +180,11 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<voi
         throw new Error('Images directory path is not set');
     }
 
+    if (state.webviewPanel) {
+        // Update existing panel's local resource roots
+        state.webviewPanel.dispose();
+    }
+
     state.webviewPanel = vscode.window.createWebviewPanel(
         'yoloAnnotator',
         'YOLO Annotation Editor',
@@ -148,7 +203,7 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<voi
     state.webviewPanel.webview.onDidReceiveMessage(
         async message => {
             try {
-                await handleWebviewMessage(message);
+                await handleWebviewMessage(message, context);
             } catch (error) {
                 console.error('Error handling webview message:', error);
                 vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -168,7 +223,7 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<voi
     }, null, context.subscriptions);
 }
 
-async function handleWebviewMessage(message: any): Promise<void> {
+async function handleWebviewMessage(message: any, context?: vscode.ExtensionContext): Promise<void> {
     switch (message.command) {
         case 'saveLabels':
             if (state.labelsDirPath && message.imageName && message.labels) {
@@ -223,6 +278,109 @@ async function handleWebviewMessage(message: any): Promise<void> {
                 vscode.window.showErrorMessage(message.message);
             }
             break;
+
+        case 'filesDropped':
+            await handleDroppedFiles(message.files);
+            break;
+            
+        case 'loadDroppedImage':
+            if (message.imagePath && message.labelPath) {
+                await loadSpecificImage(message.imagePath, message.labelPath);
+            }
+            break;
+
+        case 'requestDirectorySelection':
+            try {
+                await initializeAnnotationSession(context!);
+            } catch (error) {
+                console.error('Error initializing annotation session:', error);
+                vscode.window.showErrorMessage(`Failed to initialize session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            break;
+    }
+}
+
+async function handleDroppedFiles(files: DroppedFile[]): Promise<void> {
+    try {
+        const imageFiles = files.filter(f => f.type === 'image');
+        const labelFiles = files.filter(f => f.type === 'label');
+        const classFiles = files.filter(f => f.type === 'classes');
+
+        if (imageFiles.length === 0) {
+            vscode.window.showErrorMessage('No valid image files found in dropped files.');
+            return;
+        }
+
+        // Load classes if provided
+        if (classFiles.length > 0) {
+            await loadClassNames(classFiles[0].path);
+        } else if (state.classNames.length === 0) {
+            // Prompt for classes file if none loaded
+            const classesFileUri = await getFile('Select classes.txt file', 'txt');
+            if (classesFileUri) {
+                await loadClassNames(classesFileUri.fsPath);
+            } else {
+                vscode.window.showWarningMessage('No classes file selected. Using default class names.');
+                state.classNames = ['object']; // Default class
+            }
+        }
+
+        // Set up directories based on dropped files
+        const firstImagePath = imageFiles[0].path;
+        state.imagesDirPath = path.dirname(firstImagePath);
+        
+        if (labelFiles.length > 0) {
+            state.labelsDirPath = path.dirname(labelFiles[0].path);
+        } else {
+            // Default to same directory as images
+            state.labelsDirPath = state.imagesDirPath;
+        }
+
+        // Update image list
+        await loadImages();
+
+        // Find and load the dropped image
+        const droppedImageName = path.basename(firstImagePath);
+        const imageIndex = state.allImagesInDir.findIndex(name => name === droppedImageName);
+        
+        if (imageIndex !== -1) {
+            state.currentImageIndex = imageIndex;
+            await sendImageDataToWebview(imageIndex);
+            vscode.window.showInformationMessage(`Loaded ${imageFiles.length} image(s) and ${labelFiles.length} label file(s).`);
+        } else {
+            vscode.window.showErrorMessage('Dropped image not found in directory.');
+        }
+
+    } catch (error) {
+        console.error('Error handling dropped files:', error);
+        vscode.window.showErrorMessage(`Error processing dropped files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+}
+
+async function loadSpecificImage(imagePath: string, labelPath?: string): Promise<void> {
+    try {
+        // Set paths if not already set
+        if (!state.imagesDirPath) {
+            state.imagesDirPath = path.dirname(imagePath);
+            await loadImages();
+        }
+        
+        if (!state.labelsDirPath && labelPath) {
+            state.labelsDirPath = path.dirname(labelPath);
+        }
+
+        const imageName = path.basename(imagePath);
+        const imageIndex = state.allImagesInDir.findIndex(name => name === imageName);
+        
+        if (imageIndex !== -1) {
+            state.currentImageIndex = imageIndex;
+            await sendImageDataToWebview(imageIndex);
+        } else {
+            vscode.window.showErrorMessage(`Image ${imageName} not found in current directory.`);
+        }
+    } catch (error) {
+        console.error('Error loading specific image:', error);
+        vscode.window.showErrorMessage(`Error loading image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
 
@@ -437,6 +595,57 @@ function getWebviewContent(webview: vscode.Webview): string {
             display: flex; 
             width: 100%; 
             height: 100%; 
+            position: relative;
+        }
+        
+        .drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 123, 255, 0.1);
+            border: 3px dashed #007acc;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .drop-zone.active {
+            display: flex;
+        }
+        
+        .drop-message {
+            background-color: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .file-input-area {
+            margin-bottom: 15px;
+            padding: 20px;
+            border: 2px dashed #555;
+            border-radius: 8px;
+            text-align: center;
+            background-color: #3c3c3c;
+            transition: all 0.3s ease;
+        }
+        
+        .file-input-area:hover {
+            border-color: #007acc;
+            background-color: #404040;
+        }
+        
+        .file-input-area p {
+            margin: 0;
+            color: #bbb;
+            font-size: 14px;
         }
         
         .image-panel { 
@@ -619,14 +828,29 @@ function getWebviewContent(webview: vscode.Webview): string {
 </head>
 <body>
     <div class="container">
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-message">
+                Drop images (.jpg, .png), labels (.txt), or classes.txt files here
+            </div>
+        </div>
+        
         <div class="image-panel">
             <div class="image-container">
                 <img id="mainImage" src="" alt="Annotation Image" crossorigin="anonymous">
                 <canvas id="canvas"></canvas>
             </div>
         </div>
+        
         <div class="controls-panel">
             <div id="statusMessagesContainer"></div>
+
+            <div class="control-group">
+                <h3>Quick Load</h3>
+                <div class="file-input-area">
+                    <p>Drag & drop images and labels here<br>or use the buttons below</p>
+                </div>
+                <button onclick="requestDirectorySelection()">Select Directories</button>
+            </div>
 
             <div class="control-group">
                 <h3>Navigation & Actions</h3>
@@ -660,6 +884,7 @@ function getWebviewContent(webview: vscode.Webview): string {
         const imgElement = document.getElementById('mainImage');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const dropZone = document.getElementById('dropZone');
 
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
@@ -679,6 +904,98 @@ function getWebviewContent(webview: vscode.Webview): string {
         let isDrawing = false;
         let isDrawingMode = false; 
         let startX, startY, mouseX, mouseY; 
+        let dragCounter = 0;
+
+        // Drag and Drop functionality
+        function setupDragAndDrop() {
+            const container = document.querySelector('.container');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                container.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            container.addEventListener('dragenter', handleDragEnter);
+            container.addEventListener('dragover', handleDragOver);
+            container.addEventListener('dragleave', handleDragLeave);
+            container.addEventListener('drop', handleDrop);
+
+            function handleDragEnter(e) {
+                dragCounter++;
+                dropZone.classList.add('active');
+            }
+
+            function handleDragOver(e) {
+                e.dataTransfer.dropEffect = 'copy';
+            }
+
+            function handleDragLeave(e) {
+                dragCounter--;
+                if (dragCounter === 0) {
+                    dropZone.classList.remove('active');
+                }
+            }
+
+            async function handleDrop(e) {
+                dragCounter = 0;
+                dropZone.classList.remove('active');
+                
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length === 0) return;
+
+                const processedFiles = await Promise.all(files.map(async (file) => {
+                    const filePath = file.path || file.name;
+                    const fileName = file.name.toLowerCase();
+                    let fileType;
+
+                    if (fileName.includes('classes') && fileName.endsWith('.txt')) {
+                        fileType = 'classes';
+                    } else if (fileName.endsWith('.txt')) {
+                        fileType = 'label';
+                    } else if (fileName.match(/\\.(jpg|jpeg|png)$/i)) {
+                        fileType = 'image';
+                    } else {
+                        return null;
+                    }
+
+                    return {
+                        name: file.name,
+                        path: filePath,
+                        type: fileType,
+                        content: fileType === 'classes' ? await readFileContent(file) : undefined
+                    };
+                }));
+
+                const validFiles = processedFiles.filter(f => f !== null);
+                
+                if (validFiles.length === 0) {
+                    showStatusMessage('No valid files found. Please drop images (.jpg, .png), labels (.txt), or classes.txt files.', 'error');
+                    return;
+                }
+
+                vscode.postMessage({
+                    command: 'filesDropped',
+                    files: validFiles
+                });
+            }
+
+            async function readFileContent(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+        }
+
+        function requestDirectorySelection() {
+            vscode.postMessage({ command: 'requestDirectorySelection' });
+        }
 
         function showStatusMessage(message, type = 'info', duration = 3000) {
             statusMessagesContainer.innerHTML = '';
@@ -1072,6 +1389,9 @@ function getWebviewContent(webview: vscode.Webview): string {
                 redrawCanvas();
             }
         });
+
+        // Initialize drag and drop
+        setupDragAndDrop();
 
         // Initialize
         console.log('Webview initialized, sending ready message');
