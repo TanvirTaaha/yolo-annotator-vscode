@@ -2,7 +2,7 @@
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "TanvirTaaha",
   "author": {
     "name": "Your Name",
@@ -40,8 +40,7 @@
     "theme": "dark"
   },
   "license": "MIT",
-  "activationEvents": [
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
