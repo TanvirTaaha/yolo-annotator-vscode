@@ -2,7 +2,7 @@
 
 Visual annotation tool for creating YOLO object detection datasets in VS Code.
 
-![YOLO Annotator Demo](icon.png)
+![YOLO Annotator Demo](assets/icon128.png)
 
 ## Features
 
