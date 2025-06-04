@@ -1,0 +1,4 @@
+ INFO  Publishing 'TanvirTaaha.yolo-annotator v1.0.0'...
+ INFO  Extension URL (might take a few minutes): https://marketplace.visualstudio.com/items?itemName=TanvirTaaha.yolo-annotator
+ INFO  Hub URL: https://marketplace.visualstudio.com/manage/publishers/TanvirTaaha/extensions/yolo-annotator/hub
+ DONE  Published TanvirTaaha.yolo-annotator v1.0.0.

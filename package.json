@@ -3,7 +3,7 @@
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
   "version": "1.0.0",
-  "publisher": "your-publisher-name",
+  "publisher": "TanvirTaaha",
   "author": {
     "name": "Your Name",
     "email": "your-email@example.com"
@@ -34,7 +34,7 @@
     "dataset",
     "labeling"
   ],
-  "icon": "icon.png",
+  "icon": "assets/icon128.png",
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
