@@ -67,7 +67,9 @@ async function createInitialWebviewPanel(context: vscode.ExtensionContext): Prom
             localResourceRoots: [
                 vscode.Uri.file(path.join(context.extensionPath, 'media'))
             ],
-            retainContextWhenHidden: true
+            retainContextWhenHidden: true,
+            // Prevent VS Code from handling dropped files
+            enableFindWidget: false
         }
     );
 
@@ -575,7 +577,7 @@ function getWebviewContent(webview: vscode.Webview): string {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob: file:; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; connect-src 'none';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOLO Annotation Editor</title>
     <style>
@@ -589,6 +591,12 @@ function getWebviewContent(webview: vscode.Webview): string {
             font-size: 14px; 
             background-color: #1e1e1e; 
             color: #cccccc;
+            /* Prevent default drag behavior */
+            -webkit-user-drag: none;
+            -khtml-user-drag: none;
+            -moz-user-drag: none;
+            -o-user-drag: none;
+            user-drag: none;
         }
         
         .container { 
@@ -880,6 +888,33 @@ function getWebviewContent(webview: vscode.Webview): string {
     </div>
 
     <script nonce="${nonce}">
+        // Prevent VS Code from intercepting drag and drop events
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, true);
+
+            document.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, true);
+
+            document.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, true);
+
+            document.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, true);
+        });
+
         const vscode = acquireVsCodeApi();
         const imgElement = document.getElementById('mainImage');
         const canvas = document.getElementById('canvas');
@@ -910,13 +945,17 @@ function getWebviewContent(webview: vscode.Webview): string {
         function setupDragAndDrop() {
             const container = document.querySelector('.container');
             
+            // Prevent default behavior on document and body level
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                document.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
                 container.addEventListener(eventName, preventDefaults, false);
             });
 
             function preventDefaults(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
             }
 
             container.addEventListener('dragenter', handleDragEnter);
