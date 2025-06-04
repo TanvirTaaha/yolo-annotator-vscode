@@ -3,7 +3,7 @@
 Visual annotation tool for creating YOLO object detection datasets in VS Code.
 
 <div align=center>
-    <img src="./assets/icon128.png">
+    <img src="https://raw.githubusercontent.com/TanvirTaaha/yolo-annotator-vscode/refs/heads/main/assets/icon128.png">
 </div>
 
 ## Features
@@ -94,4 +94,4 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-Report issues at: [https://github.com/yourusername/yolo-annotator/issues]
+Report issues at: [https://github.com/TanvirTaaha/yolo-annotator-vscode/issues]

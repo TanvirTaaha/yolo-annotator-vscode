@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/yolo-annotator"
+    "url": "https://github.com/TanvirTaaha/yolo-annotator-vscode"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/yolo-annotator/issues"
+    "url": "https://github.com/TanvirTaaha/yolo-annotator-vscode/issues"
   },
-  "homepage": "https://github.com/yourusername/yolo-annotator#readme",
+  "homepage": "https://github.com/TanvirTaaha/yolo-annotator-vscode#readme",
   "engines": {
     "vscode": "^1.100.0"
   },
