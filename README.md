@@ -1,71 +1,89 @@
-# yolo-annotator README
+# YOLO Annotator
 
-This is the README for your extension "yolo-annotator". After writing up a brief description, we recommend including the following sections.
+Visual annotation tool for creating YOLO object detection datasets in VS Code.
+
+![YOLO Annotator Demo](icon.png)
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Visual Annotation**: Draw bounding boxes directly on images
+- **YOLO Format**: Export annotations in standard YOLO `.txt` format
+- **Class Management**: Support for custom class definitions via `classes.txt`
+- **Keyboard Shortcuts**: Efficient workflow with hotkeys
+- **Batch Processing**: Navigate through image directories seamlessly
+- **Real-time Editing**: Modify existing annotations with live preview
 
-For example if there is an image subfolder under your extension project workspace:
+## Installation
 
-\!\[feature X\]\(images/feature-x.png\)
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search "YOLO Annotator"
+4. Click Install
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Usage
+
+### Quick Start
+1. Open Command Palette (`Ctrl+Shift+P`)
+2. Run "Start YOLO Annotation Editor"
+3. Select:
+   - Images directory (containing .jpg, .png files)
+   - Labels directory (for .txt output files)
+   - classes.txt file (one class name per line)
+
+### Keyboard Shortcuts
+- `A` - Add new label (drawing mode)
+- `←/→` - Navigate between images
+- `Ctrl+S` - Save current labels
+- `Delete/Backspace` - Delete selected label
+- `Esc` - Cancel drawing mode
+
+### File Structure
+```
+project/
+├── images/
+│   ├── image1.jpg
+│   ├── image2.jpg
+│   └── ...
+├── labels/
+│   ├── image1.txt
+│   ├── image2.txt
+│   └── ...
+└── classes.txt
+```
+
+### classes.txt Format
+```
+person
+car
+bicycle
+dog
+cat
+```
+
+### Output Format
+Each `.txt` file contains one line per object:
+```
+class_id center_x center_y width height
+0 0.5 0.5 0.3 0.4
+1 0.2 0.3 0.1 0.2
+```
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- VS Code 1.100.0 or higher
+- Image files in JPG, PNG, or JPEG format
 
-## Extension Settings
+## Contributing
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-For example:
+## License
 
-This extension contributes the following settings:
+MIT License - see LICENSE file for details.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Support
 
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Report issues at: https://github.com/yourusername/yolo-annotator/issues

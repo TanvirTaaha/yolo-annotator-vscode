@@ -1,19 +1,45 @@
 {
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
-  "description": "YOLO Annotation Editor for Visual Studio Code",
-  "version": "0.0.1",
+  "description": "Visual annotation tool for YOLO object detection datasets with bounding box editing",
+  "version": "1.0.0",
   "publisher": "your-publisher-name",
+  "author": {
+    "name": "Your Name",
+    "email": "your-email@example.com"
+  },
   "repository": {
     "type": "git",
-    "url": "your-repo-url"
+    "url": "https://github.com/yourusername/yolo-annotator"
   },
+  "bugs": {
+    "url": "https://github.com/yourusername/yolo-annotator/issues"
+  },
+  "homepage": "https://github.com/yourusername/yolo-annotator#readme",
   "engines": {
     "vscode": "^1.100.0"
   },
   "categories": [
+    "Machine Learning",
+    "Data Science",
     "Other"
   ],
+  "keywords": [
+    "yolo",
+    "annotation",
+    "object-detection",
+    "machine-learning",
+    "computer-vision",
+    "bounding-box",
+    "dataset",
+    "labeling"
+  ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "license": "MIT",
   "activationEvents": [
     "onCommand:yolo-annotator.start"
   ],
@@ -23,7 +49,8 @@
       {
         "command": "yolo-annotator.start",
         "title": "Start YOLO Annotation Editor",
-        "category": "YOLO Annotator"
+        "category": "YOLO Annotator",
+        "icon": "$(pencil)"
       }
     ],
     "menus": {
@@ -33,8 +60,20 @@
           "group": "navigation",
           "when": "explorerResourceIsFolder"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "yolo-annotator.start"
+        }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "yolo-annotator.start",
+        "key": "ctrl+shift+y",
+        "mac": "cmd+shift+y"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -48,20 +87,17 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test",
-    "audit-fix": "npm audit fix",
-    "update-deps": "npm update",
-    "debug-buffer": "node --trace-deprecation --trace-warnings npm run compile"
+    "test": "vscode-test"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.15.29",
+    "@types/node": "^22.0.0",
     "@types/vscode": "^1.100.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.5.2",
-    "esbuild": "^0.25.5",
+    "esbuild": "^0.25.3",
     "eslint": "^9.25.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3"
