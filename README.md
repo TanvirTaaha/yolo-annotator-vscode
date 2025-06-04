@@ -2,7 +2,9 @@
 
 Visual annotation tool for creating YOLO object detection datasets in VS Code.
 
-![YOLO Annotator Demo](assets/icon128.png)
+<div align=center>
+    <img src="./assets/icon128.png">
+</div>
 
 ## Features
 
@@ -23,6 +25,7 @@ Visual annotation tool for creating YOLO object detection datasets in VS Code.
 ## Usage
 
 ### Quick Start
+
 1. Open Command Palette (`Ctrl+Shift+P`)
 2. Run "Start YOLO Annotation Editor"
 3. Select:
@@ -31,6 +34,7 @@ Visual annotation tool for creating YOLO object detection datasets in VS Code.
    - classes.txt file (one class name per line)
 
 ### Keyboard Shortcuts
+
 - `A` - Add new label (drawing mode)
 - `←/→` - Navigate between images
 - `Ctrl+S` - Save current labels
@@ -38,7 +42,8 @@ Visual annotation tool for creating YOLO object detection datasets in VS Code.
 - `Esc` - Cancel drawing mode
 
 ### File Structure
-```
+
+```markdown
 project/
 ├── images/
 │   ├── image1.jpg
@@ -52,7 +57,8 @@ project/
 ```
 
 ### classes.txt Format
-```
+
+```markdown
 person
 car
 bicycle
@@ -61,8 +67,10 @@ cat
 ```
 
 ### Output Format
+
 Each `.txt` file contains one line per object:
-```
+
+```markdown
 class_id center_x center_y width height
 0 0.5 0.5 0.3 0.4
 1 0.2 0.3 0.1 0.2
@@ -86,4 +94,4 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-Report issues at: https://github.com/yourusername/yolo-annotator/issues
+Report issues at: [https://github.com/yourusername/yolo-annotator/issues]

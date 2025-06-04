@@ -41,7 +41,6 @@
   },
   "license": "MIT",
   "activationEvents": [
-    "onCommand:yolo-annotator.start"
   ],
   "main": "./dist/extension.js",
   "contributes": {
