@@ -623,9 +623,6 @@ function getWebviewContent(webview: vscode.Webview): string {
     </div>
 
     <script nonce="${nonce}">
-        // JavaScript code remains largely the same as your original implementation
-        // but with improved error handling and type safety
-        
         const vscode = acquireVsCodeApi();
         const imgElement = document.getElementById('mainImage');
         const canvas = document.getElementById('canvas');
@@ -664,11 +661,388 @@ function getWebviewContent(webview: vscode.Webview): string {
                 }, duration);
             }
         }
-        
-        // Rest of your JavaScript implementation would go here...
-        // I've kept the core structure but would recommend similar improvements
-        // to error handling and type safety throughout
-        
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            console.log('Received message:', message);
+            
+            switch(message.command) {
+                case 'loadImage':
+                    loadImageData(message);
+                    break;
+                case 'error':
+                    showStatusMessage(message.message, 'error');
+                    break;
+                case 'noImagesFound':
+                    showStatusMessage('No images found in the selected directory.', 'error', 0);
+                    break;
+                case 'labelsSaved':
+                    showStatusMessage(\`Labels saved for \${message.imageName}\`, 'success');
+                    unsavedChanges = false;
+                    break;
+                case 'updateNavButtons':
+                    updateNavigationButtons(message.canGoPrev, message.canGoNext);
+                    break;
+            }
+        });
+
+        function loadImageData(data) {
+            try {
+                currentImageName = data.imageName;
+                currentLabels = data.labels || [];
+                currentClassNames = data.classes || [];
+
+                imageInfoSpan.textContent = \`\${data.currentIndex + 1} / \${data.totalImages}\`;
+                
+                imgElement.onload = function() {
+                    console.log('Image loaded successfully:', currentImageName);
+                    setupCanvas();
+                    updateUI();
+                    redrawCanvas();
+                };
+                
+                imgElement.onerror = function() {
+                    console.error('Failed to load image:', data.imageUri);
+                    showStatusMessage(\`Failed to load image: \${currentImageName}\`, 'error');
+                };
+
+                console.log('Setting image src to:', data.imageUri);
+                imgElement.src = data.imageUri;
+                
+            } catch (error) {
+                console.error('Error in loadImageData:', error);
+                showStatusMessage('Error loading image data', 'error');
+            }
+        }
+
+        function setupCanvas() {
+            const rect = imgElement.getBoundingClientRect();
+            canvas.width = imgElement.naturalWidth;
+            canvas.height = imgElement.naturalHeight;
+            canvas.style.width = imgElement.offsetWidth + 'px';
+            canvas.style.height = imgElement.offsetHeight + 'px';
+        }
+
+        function updateUI() {
+            updateLabelsList();
+            updateEditForm();
+            updateNavigationButtons(true, true);
+        }
+
+        function updateLabelsList() {
+            currentLabelsHeader.textContent = \`Current Labels (\${currentLabels.length})\`;
+            
+            if (currentLabels.length === 0) {
+                labelListDisplay.innerHTML = '<p class="no-content">No labels yet for this image.</p>';
+                return;
+            }
+
+            labelListDisplay.innerHTML = '';
+            currentLabels.forEach((label, index) => {
+                const div = document.createElement('div');
+                div.className = 'label-item';
+                if (index === selectedLabelIndex) {
+                    div.classList.add('selected');
+                }
+                
+                const className = currentClassNames[label.classId] || \`Class \${label.classId}\`;
+                div.innerHTML = \`
+                    <span>\${className}</span>
+                    <button onclick="deleteLabel(\${index})" style="background-color: #dc3545; padding: 4px 8px; font-size: 12px;">Delete</button>
+                \`;
+                
+                div.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'BUTTON') {
+                        selectLabel(index);
+                    }
+                });
+                
+                labelListDisplay.appendChild(div);
+            });
+        }
+
+        function selectLabel(index) {
+            selectedLabelIndex = index;
+            updateLabelsList();
+            updateEditForm();
+            redrawCanvas();
+        }
+
+        function deleteLabel(index) {
+            currentLabels.splice(index, 1);
+            if (selectedLabelIndex >= index) {
+                selectedLabelIndex = selectedLabelIndex > 0 ? selectedLabelIndex - 1 : -1;
+            }
+            unsavedChanges = true;
+            updateUI();
+            redrawCanvas();
+        }
+
+        function updateEditForm() {
+            if (selectedLabelIndex === -1 || !currentLabels[selectedLabelIndex]) {
+                editFormContainer.innerHTML = '<p class="no-content">Select or create a label to edit.</p>';
+                return;
+            }
+
+            const label = currentLabels[selectedLabelIndex];
+            editFormContainer.innerHTML = \`
+                <label>Class:</label>
+                <select id="classSelect">
+                    \${currentClassNames.map((name, idx) => 
+                        \`<option value="\${idx}" \${idx === label.classId ? 'selected' : ''}>\${name}</option>\`
+                    ).join('')}
+                </select>
+                
+                <label>Center X (0-1):</label>
+                <input type="number" id="cxInput" value="\${label.cx.toFixed(6)}" step="0.000001" min="0" max="1">
+                
+                <label>Center Y (0-1):</label>
+                <input type="number" id="cyInput" value="\${label.cy.toFixed(6)}" step="0.000001" min="0" max="1">
+                
+                <label>Width (0-1):</label>
+                <input type="number" id="wInput" value="\${label.w.toFixed(6)}" step="0.000001" min="0" max="1">
+                
+                <label>Height (0-1):</label>
+                <input type="number" id="hInput" value="\${label.h.toFixed(6)}" step="0.000001" min="0" max="1">
+                
+                <button onclick="updateSelectedLabel()" style="background-color: #28a745; margin-top: 10px;">Update Label</button>
+            \`;
+        }
+
+        function updateSelectedLabel() {
+            if (selectedLabelIndex === -1) return;
+
+            const classSelect = document.getElementById('classSelect');
+            const cxInput = document.getElementById('cxInput');
+            const cyInput = document.getElementById('cyInput');
+            const wInput = document.getElementById('wInput');
+            const hInput = document.getElementById('hInput');
+
+            currentLabels[selectedLabelIndex] = {
+                classId: parseInt(classSelect.value),
+                cx: parseFloat(cxInput.value),
+                cy: parseFloat(cyInput.value),
+                w: parseFloat(wInput.value),
+                h: parseFloat(hInput.value)
+            };
+
+            unsavedChanges = true;
+            updateLabelsList();
+            redrawCanvas();
+            showStatusMessage('Label updated', 'success', 2000);
+        }
+
+        function updateNavigationButtons(canGoPrev, canGoNext) {
+            prevBtn.disabled = !canGoPrev;
+            nextBtn.disabled = !canGoNext;
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw all labels
+            currentLabels.forEach((label, index) => {
+                const isSelected = index === selectedLabelIndex;
+                drawBoundingBox(label, isSelected);
+            });
+
+            // Draw current drawing if in drawing mode
+            if (isDrawing && isDrawingMode) {
+                drawCurrentBox();
+            }
+        }
+
+        function drawBoundingBox(label, isSelected) {
+            const x = (label.cx - label.w / 2) * canvas.width;
+            const y = (label.cy - label.h / 2) * canvas.height;
+            const width = label.w * canvas.width;
+            const height = label.h * canvas.height;
+
+            ctx.strokeStyle = isSelected ? '#ff0000' : '#00ff00';
+            ctx.lineWidth = isSelected ? 3 : 2;
+            ctx.strokeRect(x, y, width, height);
+
+            // Draw class label
+            const className = currentClassNames[label.classId] || ('Class ' + label.classId);
+            ctx.fillStyle = isSelected ? '#ff0000' : '#00ff00';
+            ctx.font = '14px Arial';
+            ctx.fillText(className, x, y - 5);
+        }
+
+        function drawCurrentBox() {
+            if (!startX || !startY || !mouseX || !mouseY) return;
+
+            const x = Math.min(startX, mouseX);
+            const y = Math.min(startY, mouseY);
+            const width = Math.abs(mouseX - startX);
+            const height = Math.abs(mouseY - startY);
+
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(x, y, width, height);
+            ctx.setLineDash([]);
+        }
+
+        function getCanvasCoordinates(event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            return {
+                x: (event.clientX - rect.left) * scaleX,
+                y: (event.clientY - rect.top) * scaleY
+            };
+        }
+
+        function convertToYOLO(x, y, width, height) {
+            return {
+                cx: (x + width / 2) / canvas.width,
+                cy: (y + height / 2) / canvas.height,
+                w: width / canvas.width,
+                h: height / canvas.height
+            };
+        }
+
+        // Event listeners
+        prevBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'requestPreviousImage' });
+        });
+
+        nextBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'requestNextImage' });
+        });
+
+        saveBtn.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'saveLabels',
+                imageName: currentImageName,
+                labels: currentLabels
+            });
+        });
+
+        addLabelBtn.addEventListener('click', () => {
+            isDrawingMode = !isDrawingMode;
+            addLabelBtn.textContent = isDrawingMode ? 'Cancel Drawing' : 'Add New Label';
+            addLabelBtn.style.backgroundColor = isDrawingMode ? '#dc3545' : '#007acc';
+            canvas.style.cursor = isDrawingMode ? 'crosshair' : 'default';
+            
+            if (!isDrawingMode) {
+                isDrawing = false;
+                redrawCanvas();
+            }
+        });
+
+        // Canvas mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isDrawingMode) {
+                // Check if clicking on an existing label
+                const coords = getCanvasCoordinates(e);
+                const clickedLabelIndex = findLabelAtPosition(coords.x, coords.y);
+                if (clickedLabelIndex !== -1) {
+                    selectLabel(clickedLabelIndex);
+                }
+                return;
+            }
+
+            const coords = getCanvasCoordinates(e);
+            startX = coords.x;
+            startY = coords.y;
+            isDrawing = true;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !isDrawingMode) return;
+
+            const coords = getCanvasCoordinates(e);
+            mouseX = coords.x;
+            mouseY = coords.y;
+            redrawCanvas();
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDrawing || !isDrawingMode) return;
+
+            const coords = getCanvasCoordinates(e);
+            const x = Math.min(startX, coords.x);
+            const y = Math.min(startY, coords.y);
+            const width = Math.abs(coords.x - startX);
+            const height = Math.abs(coords.y - startY);
+
+            if (width > 5 && height > 5) { // Minimum size check
+                const yoloCoords = convertToYOLO(x, y, width, height);
+                
+                const newLabel = {
+                    classId: 0, // Default to first class
+                    cx: yoloCoords.cx,
+                    cy: yoloCoords.cy,
+                    w: yoloCoords.w,
+                    h: yoloCoords.h
+                };
+
+                currentLabels.push(newLabel);
+                selectedLabelIndex = currentLabels.length - 1;
+                unsavedChanges = true;
+                
+                updateUI();
+                redrawCanvas();
+                showStatusMessage('New label created', 'success', 2000);
+            }
+
+            isDrawing = false;
+            isDrawingMode = false;
+            addLabelBtn.textContent = 'Add New Label';
+            addLabelBtn.style.backgroundColor = '#007acc';
+            canvas.style.cursor = 'default';
+        });
+
+        function findLabelAtPosition(x, y) {
+            for (let i = currentLabels.length - 1; i >= 0; i--) {
+                const label = currentLabels[i];
+                const labelX = (label.cx - label.w / 2) * canvas.width;
+                const labelY = (label.cy - label.h / 2) * canvas.height;
+                const labelWidth = label.w * canvas.width;
+                const labelHeight = label.h * canvas.height;
+
+                if (x >= labelX && x <= labelX + labelWidth && 
+                    y >= labelY && y <= labelY + labelHeight) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveBtn.click();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (!prevBtn.disabled) prevBtn.click();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (!nextBtn.disabled) nextBtn.click();
+            } else if (e.key === 'a' || e.key === 'A') {
+                e.preventDefault();
+                addLabelBtn.click();
+            } else if (e.key === 'Delete' && selectedLabelIndex !== -1) {
+                e.preventDefault();
+                deleteLabel(selectedLabelIndex);
+            }
+        });
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            if (imgElement.complete && imgElement.naturalWidth > 0) {
+                setupCanvas();
+                redrawCanvas();
+            }
+        });
+
+        // Initialize
+        console.log('Webview initialized, sending ready message');
         vscode.postMessage({ command: 'webviewReady' });
     </script>
 </body>
