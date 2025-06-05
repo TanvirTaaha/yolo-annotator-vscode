@@ -364,12 +364,22 @@ async function startAnnotationSession(context: vscode.ExtensionContext): Promise
 
         if (!state.labelsDirPath) {
             // Default to same directory as images if no labels directory selected
-            state.labelsDirPath = state.imagesDirPath;
+            state.labelsDirPath = await predictAsumedLabelsDirPath(state.imagesDirPath);
         }
 
         if (state.classNames.length === 0) {
-            vscode.window.showWarningMessage('No classes file selected. Using default class names.');
-            state.classNames = ['object']; // Default class
+			const classesfile = await loadAsumedClassesFile(state.imagesDirPath);
+			if (classesfile) {
+				await loadClassNames(classesfile);
+				state.webviewPanel?.webview.postMessage({ 
+					command: 'updatePath', 
+					type: 'classes',
+					path: classesfile
+				});
+			} else {
+				vscode.window.showWarningMessage('No classes file selected. Using default class names.');
+				state.classNames = ['object']; // Default class
+			}
         }
 
         // Load images if not already loaded
@@ -393,6 +403,96 @@ async function startAnnotationSession(context: vscode.ExtensionContext): Promise
     } catch (error) {
         vscode.window.showErrorMessage(`Error starting annotation session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+}
+
+/**
+ * Finds the 'classes.txt' file in the dataset.
+ * @param inputPath Path to an image file or folder inside '<dataset>/images/...'
+ * @returns Full path to 'classes.txt' or undefined if not found
+ */
+export async function loadAsumedClassesFile(inputPath: string): Promise<string | undefined> {
+    const stat = fs.statSync(inputPath);
+    const inputIsFile = stat.isFile();
+
+    // Resolve absolute path and split on "/images"
+    const normalizedPath = path.resolve(inputPath);
+    const splitIndex = normalizedPath.indexOf(path.sep + 'images');
+
+    if (splitIndex === -1) {
+        console.error(`Path does not include '/images': ${normalizedPath}`);
+        return undefined;
+    }
+
+    const datasetRoot = normalizedPath.substring(0, splitIndex);
+    if (!fs.existsSync(datasetRoot)) {
+        console.error(`Dataset root folder not found: ${datasetRoot}`);
+        return undefined;
+    }
+
+    // Recursively search for classes.txt from datasetRoot
+    const result = searchForClassesTxt(datasetRoot);
+    return result;
+}
+
+/**
+ * Recursively searches for 'classes.txt' in a directory and its subdirectories
+ */
+function searchForClassesTxt(dir: string): string | undefined {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isFile() && entry.name === 'classes.txt') {
+            return fullPath;
+        } else if (entry.isDirectory()) {
+            const found = searchForClassesTxt(fullPath);
+            if (found) {return found;}
+        }
+    }
+
+    return undefined;
+}
+
+
+/**
+ * Alternative version with async/await for better performance with large directories
+ */
+async function predictAsumedLabelsDirPath(directoryPath: string): Promise<string> {
+  try {
+    // Check if the directory exists
+    const dirExists = await fs.promises.access(directoryPath, fs.constants.F_OK)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!dirExists) {
+      throw new Error(`Directory does not exist: ${directoryPath}`);
+    }
+
+    // Check if the directory contains any .txt files
+    const files = await fs.promises.readdir(directoryPath);
+    const hasTxtFiles = files.some(file => path.extname(file).toLowerCase() === '.txt');
+
+    // If directory contains .txt files, return the original path
+    if (hasTxtFiles) {
+      return directoryPath;
+    }
+
+    // If no .txt files found, replace 'images' with 'labels' in the path
+    const normalizedPath = path.normalize(directoryPath);
+    const pathParts = normalizedPath.split(path.sep);
+    
+    // Find and replace 'images' directory with 'labels'
+    const modifiedParts = pathParts.map(part => 
+      part.toLowerCase() === 'images' ? 'labels' : part
+    );
+
+    const labelsPath = modifiedParts.join(path.sep);
+    return labelsPath;
+
+  } catch (error) {
+    console.error('Error processing directory path:', error);
+    throw error;
+  }
 }
 
 async function getDirectory(title: string): Promise<vscode.Uri | undefined> {
@@ -847,19 +947,19 @@ function getWebviewContent(webview: vscode.Webview): string {
                 <div class="file-picker-row">
                     <span class="file-picker-label">Images:</span>
                     <div id="imagesPath" class="file-picker-path empty">No directory selected</div>
-                    <button onclick="selectImagesDirectory()">📁</button>
+                    <button id="selectImagesBtn">📁</button>
                 </div>
                 
                 <div class="file-picker-row">
                     <span class="file-picker-label">Labels:</span>
                     <div id="labelsPath" class="file-picker-path empty">No directory selected</div>
-                    <button onclick="selectLabelsDirectory()">📁</button>
+                    <button id="selectLabelsBtn">📁</button>
                 </div>
                 
                 <div class="file-picker-row">
                     <span class="file-picker-label">Classes:</span>
                     <div id="classesPath" class="file-picker-path empty">No classes.txt selected</div>
-                    <button onclick="selectClassesFile()">📄</button>
+                    <button id="selectClassesBtn">📄</button>
                 </div>
                 
                 <hr style="border: none; border-top: 1px solid #555; margin: 15px 0;">
@@ -867,16 +967,16 @@ function getWebviewContent(webview: vscode.Webview): string {
                 <div class="file-picker-row">
                     <span class="file-picker-label">Single Image:</span>
                     <div id="singleImagePath" class="file-picker-path empty">No image selected</div>
-                    <button onclick="selectSingleImage()">🖼️</button>
+                    <button id="selectSingleImageBtn">🖼️</button>
                 </div>
                 
                 <div class="file-picker-row">
                     <span class="file-picker-label">Single Label:</span>
                     <div id="singleLabelPath" class="file-picker-path empty">No label selected</div>
-                    <button onclick="selectSingleLabel()">📄</button>
+                    <button id="selectSingleLabelBtn">📄</button>
                 </div>
                 
-                <button class="start-button" onclick="startAnnotation()">Start Annotation Session</button>
+                <button class="start-button" id="startAnnotationBtn">Start Annotation Session</button>
             </div>
 
             <div class="control-group">
@@ -938,6 +1038,14 @@ function getWebviewContent(webview: vscode.Webview): string {
         let isDrawingMode = false; 
         let startX, startY, mouseX, mouseY; 
 
+        // Get button references
+        const selectImagesBtn = document.getElementById('selectImagesBtn');
+        const selectLabelsBtn = document.getElementById('selectLabelsBtn');
+        const selectClassesBtn = document.getElementById('selectClassesBtn');
+        const selectSingleImageBtn = document.getElementById('selectSingleImageBtn');
+        const selectSingleLabelBtn = document.getElementById('selectSingleLabelBtn');
+        const startAnnotationBtn = document.getElementById('startAnnotationBtn');
+
         // File selection functions
         function selectImagesDirectory() {
             vscode.postMessage({ command: 'selectImagesDirectory' });
@@ -962,6 +1070,14 @@ function getWebviewContent(webview: vscode.Webview): string {
         function startAnnotation() {
             vscode.postMessage({ command: 'startAnnotation' });
         }
+
+        // Add event listeners for file picker buttons
+        selectImagesBtn.addEventListener('click', selectImagesDirectory);
+        selectLabelsBtn.addEventListener('click', selectLabelsDirectory);
+        selectClassesBtn.addEventListener('click', selectClassesFile);
+        selectSingleImageBtn.addEventListener('click', selectSingleImage);
+        selectSingleLabelBtn.addEventListener('click', selectSingleLabel);
+        startAnnotationBtn.addEventListener('click', startAnnotation);
 
         function showStatusMessage(message, type = 'info', duration = 3000) {
             statusMessagesContainer.innerHTML = '';
@@ -1098,10 +1214,19 @@ function getWebviewContent(webview: vscode.Webview): string {
                 }
                 
                 const className = currentClassNames[label.classId] || \`Class \${label.classId}\`;
-                div.innerHTML = \`
-                    <span>\${className}</span>
-                    <button onclick="deleteLabel(\${index})" style="background-color: #dc3545; padding: 4px 8px; font-size: 12px;">Delete</button>
-                \`;
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.style.cssText = 'background-color: #dc3545; padding: 4px 8px; font-size: 12px;';
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteLabel(index);
+                });
+                
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = className;
+                
+                div.appendChild(labelSpan);
+                div.appendChild(deleteBtn);
                 
                 div.addEventListener('click', (e) => {
                     if (e.target.tagName !== 'BUTTON') {
@@ -1137,28 +1262,33 @@ function getWebviewContent(webview: vscode.Webview): string {
             }
 
             const label = currentLabels[selectedLabelIndex];
-            editFormContainer.innerHTML = \`
-                <label>Class:</label>
-                <select id="classSelect">
-                    \${currentClassNames.map((name, idx) => 
-                        \`<option value="\${idx}" \${idx === label.classId ? 'selected' : ''}>\${name}</option>\`
-                    ).join('')}
-                </select>
+                            const updateBtn = document.createElement('button');
+                updateBtn.textContent = 'Update Label';
+                updateBtn.style.cssText = 'background-color: #28a745; margin-top: 10px;';
+                updateBtn.addEventListener('click', updateSelectedLabel);
                 
-                <label>Center X (0-1):</label>
-                <input type="number" id="cxInput" value="\${label.cx.toFixed(6)}" step="0.000001" min="0" max="1">
+                editFormContainer.innerHTML = \`
+                    <label>Class:</label>
+                    <select id="classSelect">
+                        \${currentClassNames.map((name, idx) => 
+                            \`<option value="\${idx}" \${idx === label.classId ? 'selected' : ''}>\${name}</option>\`
+                        ).join('')}
+                    </select>
+                    
+                    <label>Center X (0-1):</label>
+                    <input type="number" id="cxInput" value="\${label.cx.toFixed(6)}" step="0.000001" min="0" max="1">
+                    
+                    <label>Center Y (0-1):</label>
+                    <input type="number" id="cyInput" value="\${label.cy.toFixed(6)}" step="0.000001" min="0" max="1">
+                    
+                    <label>Width (0-1):</label>
+                    <input type="number" id="wInput" value="\${label.w.toFixed(6)}" step="0.000001" min="0" max="1">
+                    
+                    <label>Height (0-1):</label>
+                    <input type="number" id="hInput" value="\${label.h.toFixed(6)}" step="0.000001" min="0" max="1">
+                \`;
                 
-                <label>Center Y (0-1):</label>
-                <input type="number" id="cyInput" value="\${label.cy.toFixed(6)}" step="0.000001" min="0" max="1">
-                
-                <label>Width (0-1):</label>
-                <input type="number" id="wInput" value="\${label.w.toFixed(6)}" step="0.000001" min="0" max="1">
-                
-                <label>Height (0-1):</label>
-                <input type="number" id="hInput" value="\${label.h.toFixed(6)}" step="0.000001" min="0" max="1">
-                
-                <button onclick="updateSelectedLabel()" style="background-color: #28a745; margin-top: 10px;">Update Label</button>
-            \`;
+                editFormContainer.appendChild(updateBtn);
         }
 
         function updateSelectedLabel() {
