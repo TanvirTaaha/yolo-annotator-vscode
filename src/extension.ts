@@ -682,7 +682,7 @@ async function loadLabelsForImage(imageName: string): Promise<YOLOLabel[]> {
 function getWebviewContent(webview: vscode.Webview): string {
     const nonce = getNonce();
     
-    return `<!DOCTYPE html>
+    return /*html*/`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
