@@ -54,14 +54,20 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         
         // Initalize image preloader
         this.imagePreloader = new preloader.ImagePreloader(webviewPanel.webview);
-
-
+        
         // Create the overlay UI
         webviewPanel.webview.html = this.getOverlayHTML(webviewPanel.webview, this.context.extensionPath, document.uri);
         
         // Set up message handling
         this.setupMessageHandling(webviewPanel, document);
         this.loadCalsses(document.uri);
+        
+        await this.imagePreloader.initialize(
+            path.dirname(document.uri.fsPath),
+            document.uri.fsPath,
+            5,
+            2
+        );
     }
     
     private async loadCalsses(uri: vscode.Uri) {
@@ -169,6 +175,44 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 case 'preloadNextImage':
                     // Preload next image for smoother navigation
                     this.preloadImageLabels(message.nextImagePath);
+                    break;
+                
+                case 'nextImage':
+                    const nextHTML = await this.imagePreloader?.goToNext();
+                    const nextInfo = this.imagePreloader?.getCurrentImageInfo();
+                    webviewPanel.webview.postMessage({
+                        command: 'updateImage',
+                        html: nextHTML,
+                        info: nextInfo
+                    });
+                    break;
+
+                case 'prevImage':
+                    const prevHTML = await this.imagePreloader?.goToPrevious();
+                    const prevInfo = this.imagePreloader?.getCurrentImageInfo();
+                    webviewPanel.webview.postMessage({
+                        command: 'updateImage',
+                        html: prevHTML,
+                        info: prevInfo
+                    });
+                    break;
+
+                case 'gotoImage':
+                    const gotoHTML = await this.imagePreloader?.goToIndex(message.index);
+                    const gotoInfo = this.imagePreloader?.getCurrentImageInfo();
+                    webviewPanel.webview.postMessage({
+                        command: 'updateImage',
+                        html: gotoHTML,
+                        info: gotoInfo
+                    });
+                    break;
+
+                case 'getCacheStatus':
+                    const status = this.imagePreloader?.getCacheStatus();
+                    webviewPanel.webview.postMessage({
+                        command: 'cacheStatus',
+                        status: status
+                    });
                     break;
             }
         });

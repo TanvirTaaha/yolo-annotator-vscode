@@ -4,11 +4,12 @@ import * as fs from 'fs';
 
 
 export class ImagePreloader {
-    private imageCache = new Map<string, string>();
+    private imageBase64DataCache = new Map<string, string>();
     private imageFiles: string[] = [];
     private currentIndex = 0;
     private preloadRadius = { next: 3, prev: 2 }; // Default values
     private isPreloading = false;
+    private keepBuffer = 5; // Number of images to keep in cache around current position
 
     constructor(private webview: vscode.Webview) {}
 
@@ -19,7 +20,7 @@ export class ImagePreloader {
         // Get all image files from directory
         const files = await fs.promises.readdir(directoryPath);
         this.imageFiles = files
-            .filter(file => /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(file))
+            .filter(file => /\.(jpg|jpeg|png|bmp|webp)$/i.test(file))
             .map(file => path.join(directoryPath, file))
             .sort(); // Sort for consistent ordering
 
@@ -36,17 +37,17 @@ export class ImagePreloader {
     // Get HTML for current image (instant if cached)
     public getCurrentImageHTML(): string {
         const currentImage = this.imageFiles[this.currentIndex];
-        if (!currentImage) return '<div>No image found</div>';
+        if (!currentImage) {return '<div>No image found</div>';}
 
-        const cached = this.imageCache.get(currentImage);
+        const cached = this.imageBase64DataCache.get(currentImage);
         if (cached) {
-            return `<img src="${cached}" alt="Current Image" class="main-image" />`;
+            return `<img src="${cached}" alt="Current Image" class="main-image" id="mainImage" />`;
         }
 
         // Fallback to webview URI if not cached yet
         const imageUri = vscode.Uri.file(currentImage);
         const webviewUri = this.webview.asWebviewUri(imageUri);
-        return `<img src="${webviewUri}" alt="Current Image" class="main-image" />`;
+        return `<img src="${webviewUri}" alt="Current Image" class="main-image" id="mainImage" />`;
     }
 
     // Navigate to next image
@@ -89,7 +90,7 @@ export class ImagePreloader {
 
     // Preload images around current position
     private async preloadAroundCurrent(): Promise<void> {
-        if (this.isPreloading) return;
+        if (this.isPreloading) {return;}
         this.isPreloading = true;
 
         try {
@@ -115,7 +116,7 @@ export class ImagePreloader {
             }
 
             // Preload images that aren't already cached
-            const uncachedImages = imagesToPreload.filter(img => !this.imageCache.has(img));
+            const uncachedImages = imagesToPreload.filter(img => !this.imageBase64DataCache.has(img));
             
             if (uncachedImages.length > 0) {
                 await this.preloadImages(uncachedImages);
@@ -138,7 +139,7 @@ export class ImagePreloader {
                 const base64 = buffer.toString('base64');
                 const mimeType = this.getMimeType(imagePath);
                 const dataUrl = `data:${mimeType};base64,${base64}`;
-                this.imageCache.set(imagePath, dataUrl);
+                this.imageBase64DataCache.set(imagePath, dataUrl);
             } catch (error) {
                 console.warn(`Failed to preload image: ${imagePath}`, error);
             }
@@ -149,20 +150,19 @@ export class ImagePreloader {
 
     // Clean up images that are far from current position to manage memory
     private cleanupDistantImages(): void {
-        const keepRadius = Math.max(this.preloadRadius.next, this.preloadRadius.prev) + 2;
         const imagesToKeep = new Set<string>();
-
+        
         // Mark images to keep
-        for (let i = Math.max(0, this.currentIndex - keepRadius); 
-             i <= Math.min(this.imageFiles.length - 1, this.currentIndex + keepRadius); 
+        for (let i = Math.max(0, this.currentIndex - (this.preloadRadius.prev + this.keepBuffer)); 
+             i <= Math.min(this.imageFiles.length - 1, this.currentIndex + (this.preloadRadius.next + this.keepBuffer)); 
              i++) {
             imagesToKeep.add(this.imageFiles[i]);
         }
 
         // Remove distant images from cache
-        for (const [imagePath] of this.imageCache) {
+        for (const [imagePath] of this.imageBase64DataCache) {
             if (!imagesToKeep.has(imagePath)) {
-                this.imageCache.delete(imagePath);
+                this.imageBase64DataCache.delete(imagePath);
             }
         }
     }
@@ -174,7 +174,6 @@ export class ImagePreloader {
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.png': 'image/png',
-            '.gif': 'image/gif',
             '.bmp': 'image/bmp',
             '.webp': 'image/webp'
         };
@@ -185,161 +184,161 @@ export class ImagePreloader {
     public getCacheStatus(): { cached: number; total: number; currentCached: boolean } {
         const currentImage = this.imageFiles[this.currentIndex];
         return {
-            cached: this.imageCache.size,
+            cached: this.imageBase64DataCache.size,
             total: this.imageFiles.length,
-            currentCached: currentImage ? this.imageCache.has(currentImage) : false
+            currentCached: currentImage ? this.imageBase64DataCache.has(currentImage) : false
         };
     }
 }
 
-// Usage in your extension
-export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
-    private imagePreloader?: ImagePreloader;
+// // Usage in your extension
+// export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
+//     private imagePreloader?: ImagePreloader;
 
-    public async resolveCustomEditor(
-        document: YOLOImageDocument,
-        webviewPanel: vscode.WebviewPanel,
-        token: vscode.CancellationToken
-    ): Promise<void> {
-        // Initialize webview
-        webviewPanel.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(path.dirname(document.uri.fsPath))]
-        };
+//     public async resolveCustomEditor(
+//         document: YOLOImageDocument,
+//         webviewPanel: vscode.WebviewPanel,
+//         token: vscode.CancellationToken
+//     ): Promise<void> {
+//         // Initialize webview
+//         webviewPanel.webview.options = {
+//             enableScripts: true,
+//             localResourceRoots: [vscode.Uri.file(path.dirname(document.uri.fsPath))]
+//         };
 
-        // Initialize image preloader
-        this.imagePreloader = new ImagePreloader(webviewPanel.webview);
+//         // Initialize image preloader
+//         this.imagePreloader = new ImagePreloader(webviewPanel.webview);
         
-        const directoryPath = path.dirname(document.uri.fsPath);
-        await this.imagePreloader.initialize(
-            directoryPath, 
-            document.uri.fsPath, 
-            3, // preload 3 next images
-            2  // preload 2 previous images
-        );
+//         const directoryPath = path.dirname(document.uri.fsPath);
+//         await this.imagePreloader.initialize(
+//             directoryPath, 
+//             document.uri.fsPath, 
+//             3, // preload 3 next images
+//             2  // preload 2 previous images
+//         );
 
-        // Set initial HTML
-        webviewPanel.webview.html = this.getWebviewHTML();
+//         // Set initial HTML
+//         webviewPanel.webview.html = this.getWebviewHTML();
 
-        // Setup message handling
-        this.setupMessageHandling(webviewPanel);
-    }
+//         // Setup message handling
+//         this.setupMessageHandling(webviewPanel);
+//     }
 
-    private setupMessageHandling(webviewPanel: vscode.WebviewPanel): void {
-        webviewPanel.webview.onDidReceiveMessage(async (message) => {
-            if (!this.imagePreloader) return;
+//     private setupMessageHandling(webviewPanel: vscode.WebviewPanel): void {
+//         webviewPanel.webview.onDidReceiveMessage(async (message) => {
+//             if (!this.imagePreloader) {return;}
 
-            switch (message.command) {
-                case 'nextImage':
-                    const nextHTML = await this.imagePreloader.goToNext();
-                    const nextInfo = this.imagePreloader.getCurrentImageInfo();
-                    webviewPanel.webview.postMessage({
-                        command: 'updateImage',
-                        html: nextHTML,
-                        info: nextInfo
-                    });
-                    break;
+//             switch (message.command) {
+//                 case 'nextImage':
+//                     const nextHTML = await this.imagePreloader.goToNext();
+//                     const nextInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: nextHTML,
+//                         info: nextInfo
+//                     });
+//                     break;
 
-                case 'prevImage':
-                    const prevHTML = await this.imagePreloader.goToPrevious();
-                    const prevInfo = this.imagePreloader.getCurrentImageInfo();
-                    webviewPanel.webview.postMessage({
-                        command: 'updateImage',
-                        html: prevHTML,
-                        info: prevInfo
-                    });
-                    break;
+//                 case 'prevImage':
+//                     const prevHTML = await this.imagePreloader.goToPrevious();
+//                     const prevInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: prevHTML,
+//                         info: prevInfo
+//                     });
+//                     break;
 
-                case 'gotoImage':
-                    const gotoHTML = await this.imagePreloader.goToIndex(message.index);
-                    const gotoInfo = this.imagePreloader.getCurrentImageInfo();
-                    webviewPanel.webview.postMessage({
-                        command: 'updateImage',
-                        html: gotoHTML,
-                        info: gotoInfo
-                    });
-                    break;
+//                 case 'gotoImage':
+//                     const gotoHTML = await this.imagePreloader.goToIndex(message.index);
+//                     const gotoInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: gotoHTML,
+//                         info: gotoInfo
+//                     });
+//                     break;
 
-                case 'getCacheStatus':
-                    const status = this.imagePreloader.getCacheStatus();
-                    webviewPanel.webview.postMessage({
-                        command: 'cacheStatus',
-                        status: status
-                    });
-                    break;
-            }
-        });
-    }
+//                 case 'getCacheStatus':
+//                     const status = this.imagePreloader.getCacheStatus();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'cacheStatus',
+//                         status: status
+//                     });
+//                     break;
+//             }
+//         });
+//     }
 
-    private getWebviewHTML(): string {
-        const initialHTML = this.imagePreloader?.getCurrentImageHTML() || '';
-        const initialInfo = this.imagePreloader?.getCurrentImageInfo() || { index: 0, total: 0, filename: '' };
+//     private getWebviewHTML(): string {
+//         const initialHTML = this.imagePreloader?.getCurrentImageHTML() || '';
+//         const initialInfo = this.imagePreloader?.getCurrentImageInfo() || { index: 0, total: 0, filename: '' };
 
-        return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body { margin: 0; font-family: Arial, sans-serif; }
-                .container { display: flex; flex-direction: column; height: 100vh; }
-                .toolbar { background: #f0f0f0; padding: 10px; display: flex; gap: 10px; align-items: center; }
-                .image-container { flex: 1; display: flex; align-items: center; justify-content: center; }
-                .main-image { max-width: 100%; max-height: 100%; }
-                button { padding: 5px 10px; }
-                .info { margin-left: auto; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="toolbar">
-                    <button onclick="prevImage()">← Previous</button>
-                    <button onclick="nextImage()">Next →</button>
-                    <span id="info">${initialInfo.index + 1} / ${initialInfo.total} - ${initialInfo.filename}</span>
-                    <div class="info">
-                        <span id="cacheInfo">Loading...</span>
-                    </div>
-                </div>
-                <div class="image-container" id="imageContainer">
-                    ${initialHTML}
-                </div>
-            </div>
+//         return `
+//         <!DOCTYPE html>
+//         <html>
+//         <head>
+//             <style>
+//                 body { margin: 0; font-family: Arial, sans-serif; }
+//                 .container { display: flex; flex-direction: column; height: 100vh; }
+//                 .toolbar { background: #f0f0f0; padding: 10px; display: flex; gap: 10px; align-items: center; }
+//                 .image-container { flex: 1; display: flex; align-items: center; justify-content: center; }
+//                 .main-image { max-width: 100%; max-height: 100%; }
+//                 button { padding: 5px 10px; }
+//                 .info { margin-left: auto; }
+//             </style>
+//         </head>
+//         <body>
+//             <div class="container">
+//                 <div class="toolbar">
+//                     <button onclick="prevImage()">← Previous</button>
+//                     <button onclick="nextImage()">Next →</button>
+//                     <span id="info">${initialInfo.index + 1} / ${initialInfo.total} - ${initialInfo.filename}</span>
+//                     <div class="info">
+//                         <span id="cacheInfo">Loading...</span>
+//                     </div>
+//                 </div>
+//                 <div class="image-container" id="imageContainer">
+//                     ${initialHTML}
+//                 </div>
+//             </div>
             
-            <script>
-                const vscode = acquireVsCodeApi();
+//             <script>
+//                 const vscode = acquireVsCodeApi();
                 
-                function nextImage() {
-                    vscode.postMessage({ command: 'nextImage' });
-                }
+//                 function nextImage() {
+//                     vscode.postMessage({ command: 'nextImage' });
+//                 }
                 
-                function prevImage() {
-                    vscode.postMessage({ command: 'prevImage' });
-                }
+//                 function prevImage() {
+//                     vscode.postMessage({ command: 'prevImage' });
+//                 }
                 
-                // Keyboard navigation
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'ArrowRight') nextImage();
-                    if (e.key === 'ArrowLeft') prevImage();
-                });
+//                 // Keyboard navigation
+//                 document.addEventListener('keydown', (e) => {
+//                     if (e.key === 'ArrowRight') nextImage();
+//                     if (e.key === 'ArrowLeft') prevImage();
+//                 });
                 
-                // Handle messages from extension
-                window.addEventListener('message', (e) => {
-                    const message = e.data;
-                    if (message.command === 'updateImage') {
-                        document.getElementById('imageContainer').innerHTML = message.html;
-                        const info = message.info;
-                        document.getElementById('info').textContent = 
-                            \`\${info.index + 1} / \${info.total} - \${info.filename}\`;
-                    }
-                    if (message.command === 'cacheStatus') {
-                        document.getElementById('cacheInfo').textContent = 
-                            \`Cached: \${message.status.cached}\`;
-                    }
-                });
+//                 // Handle messages from extension
+//                 window.addEventListener('message', (e) => {
+//                     const message = e.data;
+//                     if (message.command === 'updateImage') {
+//                         document.getElementById('imageContainer').innerHTML = message.html;
+//                         const info = message.info;
+//                         document.getElementById('info').textContent = 
+//                             \`\${info.index + 1} / \${info.total} - \${info.filename}\`;
+//                     }
+//                     if (message.command === 'cacheStatus') {
+//                         document.getElementById('cacheInfo').textContent = 
+//                             \`Cached: \${message.status.cached}\`;
+//                     }
+//                 });
                 
-                // Request initial cache status
-                vscode.postMessage({ command: 'getCacheStatus' });
-            </script>
-        </body>
-        </html>`;
-    }
-}
+//                 // Request initial cache status
+//                 vscode.postMessage({ command: 'getCacheStatus' });
+//             </script>
+//         </body>
+//         </html>`;
+//     }
+// }
