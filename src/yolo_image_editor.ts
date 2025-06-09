@@ -2,8 +2,19 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 
+import * as preloader from './preloader';
+
+
 // Custom Editor Provider for Image Annotation
 export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
+    private imagePreloader?: preloader.ImagePreloader;
+    private labelCache = new Map<string, { labels: any[], mtime: number }>();
+    private classesPath = '';
+    private classes = new Array<string>();
+    
+    constructor(private readonly context: vscode.ExtensionContext) {}
+
+
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         const provider = new YOLOImageEditorProvider(context);
         const providerRegistration = vscode.window.registerCustomEditorProvider(
@@ -18,8 +29,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         );
         return providerRegistration;
     }
-
-    constructor(private readonly context: vscode.ExtensionContext) {}
 
     public async openCustomDocument(
         uri: vscode.Uri,
@@ -42,12 +51,36 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 vscode.Uri.file(path.join(this.context.extensionPath, 'media'))
             ]
         };
+        
+        // Initalize image preloader
+        this.imagePreloader = new preloader.ImagePreloader(webviewPanel.webview);
+
 
         // Create the overlay UI
         webviewPanel.webview.html = this.getOverlayHTML(webviewPanel.webview, this.context.extensionPath, document.uri);
         
         // Set up message handling
         this.setupMessageHandling(webviewPanel, document);
+        this.loadCalsses(document.uri);
+    }
+    
+    private async loadCalsses(uri: vscode.Uri) {
+        this.classesPath = path.join(path.dirname(uri.fsPath), 'classes.txt');
+        if (!fs.existsSync(this.classesPath)) {
+            this.classesPath = uri.fsPath.replace(/[\/|\\]images[\/|\\].*$/gim, path.sep + 'classes.txt');
+            if (!fs.existsSync(this.classesPath)) {
+                this.classesPath = this.classesPath.replace('classes.txt', 'images' + path.sep + 'classes.txt');
+                if (!fs.existsSync(this.classesPath)) {
+                    this.classesPath = this.classesPath.replace('classes.txt', 'labels' + path.sep + 'classes.txt');
+                } else {
+                    console.error("Can't find classes.txt");
+                    vscode.window.showErrorMessage("Failed to load the classes.txt file. Please put it in the parent directory or images/labels folder.");
+                }
+            }
+        }
+        console.log(`Classes path found:${this.classesPath}: exists: ${fs.existsSync(this.classesPath)}`);
+        this.classes = fs.readFileSync(this.classesPath, 'utf8').split('\n').filter(line => line.trim());
+        console.log(`Classes parsed:${this.classes}`);
     }
 
     private getOverlayHTML(webview: vscode.Webview, extensionPath: string, imageUri: vscode.Uri): string {
@@ -66,6 +99,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             // Replace placeholders in the HTML content
             htmlContent = htmlContent.replace(/\$\{nonce\}/g, nonce);
             htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
+            htmlContent = htmlContent.replace(/\$\{imageUri.fsPath\}/g, imageUri.fsPath);
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
             
             return htmlContent;
@@ -111,7 +145,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     const labels = await this.loadLabelsForImage(message.imagePath);
                     webviewPanel.webview.postMessage({
                         command: 'labelsLoaded',
-                        labels: labels
+                        labels: labels,
+                        classes: this.classes
                     });
                     break;
                     
@@ -175,8 +210,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         }
     }
 
-    private labelCache = new Map<string, { labels: any[], mtime: number }>();
-
     private async getFileModTime(filePath: string): Promise<number> {
         try {
             const stats = await fs.promises.stat(filePath);
@@ -206,7 +239,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         const name = path.basename(imagePath, path.extname(imagePath));
         
         // Use the predictAsumedLabelsDirPath logic here
-        const labelsDir = dir.replace(/images/gi, 'labels');
+        const labelsDir = dir.replace(`${path.sep}images${path.sep}`, `${path.sep}labels${path.sep}`);
         return path.join(labelsDir, `${name}.txt`);
     }
 

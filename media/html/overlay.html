@@ -292,7 +292,7 @@
                 <h4>Actions</h4>
                 <div class="button-group">
                     <button id="clearAllBtn" class="danger" title="Clear All Labels">Clear All</button>
-                    <button id="autoSuggestBtn" title="Auto-suggest based on similar images">AI Suggest</button>
+                    <button id="autoSuggestBtn" title="Auto-suggest based on similar images" disabled>AI Suggest</button>
                 </div>
             </div>
         </div>
@@ -370,6 +370,7 @@
 
         function loadImageLabels() {
             // Request labels for current image
+            console.log('Loading labels for image: ${imageUri.fsPath}');
             vscode.postMessage({
                 command: 'loadLabels',
                 imagePath: '${imageUri.fsPath}'
@@ -403,8 +404,8 @@
             ctx.strokeRect(x, y, width, height);
 
             // Label background
-            const className = classNames[label.classId] || `Class \${label.classId}`;
-            const labelText = `\${className} (\${index + 1})`;
+            const className = classNames[label.classId] || `Class ${label.classId}`;
+            const labelText = `${className} (${index + 1})`;
 
             ctx.font = '12px Arial';
             const textWidth = ctx.measureText(labelText).width;
@@ -443,13 +444,13 @@
                 const div = document.createElement('div');
                 div.className = 'label-item' + (index === selectedLabelIndex ? ' selected' : '');
 
-                const className = classNames[label.classId] || `Class \${label.classId}`;
+                const className = classNames[label.classId] || `Class ${label.classId}`;
                 div.innerHTML = `
                     <div>
-                        <div class="label-class">\${className}</div>
-                        <div class="label-coords">x:\${label.cx.toFixed(3)} y:\${label.cy.toFixed(3)}</div>
+                        <div class="label-class">${className}</div>
+                        <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}</div>
                     </div>
-                    <button onclick="deleteLabel(\${index})" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
+                    <button onclick="deleteLabel(${index})" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
                 `;
 
                 div.addEventListener('click', (e) => {
@@ -641,6 +642,7 @@
             switch (message.command) {
                 case 'labelsLoaded':
                     currentLabels = message.labels || [];
+                    classNames = message.classes || classNames;
                     updateLabelsList();
                     redrawAnnotations();
                     break;

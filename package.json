@@ -59,7 +59,8 @@
     "commands": [
       {
         "command": "yolo-annotator.openWithAnnotator",
-        "title": "Open with YOLO Annotator"
+        "title": "Open with YOLO Annotator",
+        "icon": "assets/open_with_annotator.png"
       },
       {
         "command": "yolo-annotator.start",
