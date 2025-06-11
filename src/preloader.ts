@@ -14,7 +14,7 @@ export class ImagePreloader {
     constructor(private webview: vscode.Webview) {}
 
     // Initialize with directory and set current image
-    public async initialize(directoryPath: string, currentImagePath: string, nextCount = 3, prevCount = 2): Promise<void> {
+    public async initialize(directoryPath: string, currentImagePath: string, prevCount = 2, nextCount = 3): Promise<void> {
         this.preloadRadius = { next: nextCount, prev: prevCount };
         
         // Get all image files from directory
@@ -32,6 +32,11 @@ export class ImagePreloader {
 
         // Start preloading around current image
         await this.preloadAroundCurrent();
+    }
+
+    //Get the current Image path
+    public getCurrentImagePath(): string {
+        return this.imageFiles[this.currentIndex];
     }
 
     // Get HTML for current image (instant if cached)

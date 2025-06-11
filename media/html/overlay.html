@@ -61,6 +61,16 @@
             color: #cccccc;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 13px;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+        }
+
+        .control-panel:hover {
+            opacity: 1;
+        }
+
+        .control-panel.ghosted {
+            display: none;
         }
 
         .control-panel.collapsed .panel-content,
@@ -69,9 +79,9 @@
             margin: 0;
             padding: 0;
         }
-        
+
         .control-panel.collapsed .panel-header {
-        	margin: 0;
+            margin: 0;
             padding: 0;
             border: none;
         }
@@ -131,10 +141,10 @@
             transition: background-color 0.2s;
         }
 
-        button:hover{
+        button:hover {
             border-color: #cccccc;
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         button:disabled {
@@ -197,6 +207,13 @@
 
         .label-class {
             font-weight: bold;
+            /* Changes the cursor to a hand icon on hover */
+            cursor: pointer;
+        }
+
+        .label-class:hover {
+            color: white;
+            text-decoration: underline;
         }
 
         .label-coords {
@@ -240,7 +257,7 @@
             font-size: 11px;
             color: #888;
             z-index: 100;
-            opacity: 0.7;
+            opacity: 0.2;
             transition: opacity 0.3s;
         }
 
@@ -262,7 +279,9 @@
 <body>
     <div class="image-container">
         <div id="imageContainer">
-            <img id="mainImage" src="${imageWebviewUri}" alt="Annotation Image">
+            <!-- Don't hardcode the image here, let the preloader handle it -->
+            <!-- <img id="mainImage" src="${imageWebviewUri}" alt="Annotation Image"> -->
+            <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
         </div>
         <canvas id="annotationCanvas"></canvas>
     </div>
@@ -279,9 +298,7 @@
             <div class="control-section">
                 <div class="nav-controls">
                     <button id="prevBtn" title="Previous Image (←)">‹</button>
-                    <div class="image-info" id="imageInfo">
-                        <span id="cacheInfo">Loading...</span>
-                    </div>
+                    <div class="image-info" id="imageInfo">Loading...</div>
                     <button id="nextBtn" title="Next Image (→)">›</button>
                 </div>
             </div>
@@ -308,7 +325,8 @@
                 <h4>Actions</h4>
                 <div class="button-group">
                     <button id="clearAllBtn" class="danger" title="Clear All Labels">Clear All</button>
-                    <button id="autoSuggestBtn" title="Auto-suggest based on similar images" disabled>AI Suggest</button>
+                    <button id="autoSuggestBtn" title="Auto-suggest based on similar images" disabled>AI
+                        Suggest</button>
                 </div>
             </div>
         </div>
@@ -330,13 +348,13 @@
         const vscode = acquireVsCodeApi();
 
         // Core elements
-        const image = document.getElementById('mainImage');
         const canvas = document.getElementById('annotationCanvas');
         const ctx = canvas.getContext('2d');
         const controlPanel = document.getElementById('controlPanel');
         const panelContent = document.getElementById('panelContent');
         const collapseBtn = document.getElementById('collapseBtn');
         const statusIndicator = document.getElementById('statusIndicator');
+        const imageContainer = document.getElementById('imageContainer');
 
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
@@ -357,20 +375,11 @@
         let startPos = null;
         let currentPos = null;
         let classNames = ['person', 'car', 'bicycle']; // Default classes
-
-        // Panel collapse/expand
-        collapseBtn.addEventListener('click', () => {
-            controlPanel.classList.toggle('collapsed');
-            collapseBtn.textContent = controlPanel.classList.contains('collapsed') ? '+' : '−';
-        });
-
-        // Image load handler
-        image.addEventListener('load', () => {
-            setupCanvas();
-            loadImageLabels();
-        });
+        let popupTargetIndex = -1; // Index of label to be edited
+        let popupIsShowing = false;
 
         function setupCanvas() {
+            const image = document.getElementById('mainImage');
             const rect = image.getBoundingClientRect();
             canvas.width = image.naturalWidth;
             canvas.height = image.naturalHeight;
@@ -394,6 +403,7 @@
         }
 
         function redrawAnnotations() {
+            console.log(`inside redrawAnnotations: ${currentLabels[0]}`);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw existing labels
@@ -466,11 +476,21 @@
                         <div class="label-class">${className}</div>
                         <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}</div>
                     </div>
-                    <button onclick="deleteLabel(${index})" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
+                    <button id="labelEntryDeleteBtn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
                 `;
+
+                div.getElementsByClassName('label-class')[0].addEventListener('click', (e) => {
+                    showPopup(index);
+                });
+
+                div.getElementsByTagName("button")[0].addEventListener('click', (e) => {
+                    deleteLabel(index);
+                });
 
                 div.addEventListener('click', (e) => {
                     if (e.target.tagName !== 'BUTTON') {
+                        clicked = true;
+                        unSelectLabel();
                         selectLabel(index);
                     }
                 });
@@ -481,6 +501,12 @@
 
         function selectLabel(index) {
             selectedLabelIndex = index;
+            updateLabelsList();
+            redrawAnnotations();
+        }
+
+        function unSelectLabel() {
+            selectedLabelIndex = -1;
             updateLabelsList();
             redrawAnnotations();
         }
@@ -503,12 +529,29 @@
             }, 3000);
         }
 
+        // Show popup and initialize input with selected label's class
+        function showPopup(index) {
+            popupIsShowing = true;
+            popupTargetIndex = index;
+            vscode.postMessage({
+                command: 'editClassOfLabel',
+                labelIndex: index
+            });
+        }
+
         // Event Listeners
+        // Panel collapse/expand
+        collapseBtn.addEventListener('click', () => {
+            controlPanel.classList.toggle('collapsed');
+            collapseBtn.textContent = controlPanel.classList.contains('collapsed') ? '+' : '−';
+        });
+
         addLabelBtn.addEventListener('click', () => {
             drawingMode = !drawingMode;
             addLabelBtn.textContent = drawingMode ? 'Cancel' : 'Add Box';
             addLabelBtn.className = drawingMode ? 'danger' : '';
             canvas.style.cursor = drawingMode ? 'crosshair' : 'default';
+            controlPanel.classList.toggle('ghosted', drawingMode);
         });
 
         saveBtn.addEventListener('click', () => {
@@ -529,6 +572,20 @@
             }
         });
 
+        prevBtn.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'prevImage',
+                sendLabels: true
+            });
+        });
+
+        nextBtn.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'nextImage',
+                sendLabels: true
+            });
+        });
+
         // Canvas interaction
         canvas.addEventListener('mousedown', (e) => {
             if (drawingMode) {
@@ -545,9 +602,18 @@
                 const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
                 const clickedIndex = findLabelAtPosition(x, y);
-                if (clickedIndex !== -1) {
-                    selectLabel(clickedIndex);
+                switch (clickedIndex) {
+                    case -1:
+                        unSelectLabel();
+                        break;
+                    case selectedLabelIndex:
+                        showPopup(clickedIndex);
+                        break;
+                    default:
+                        selectLabel(clickedIndex);
+                        break;
                 }
+
             }
         });
 
@@ -571,7 +637,7 @@
 
                 if (width > 10 && height > 10) {
                     const label = {
-                        classId: 0,
+                        classId: -1,
                         cx: (x + width / 2) / canvas.width,
                         cy: (y + height / 2) / canvas.height,
                         w: width / canvas.width,
@@ -581,7 +647,7 @@
                     currentLabels.push(label);
                     selectedLabelIndex = currentLabels.length - 1;
                     updateLabelsList();
-                    showStatus('Label added', false);
+                    showPopup(currentLabels.length - 1);
                 }
 
                 isDrawing = false;
@@ -589,11 +655,27 @@
                 addLabelBtn.textContent = 'Add Box';
                 addLabelBtn.className = '';
                 canvas.style.cursor = 'default';
+                controlPanel.classList.toggle('ghosted', drawingMode);
                 redrawAnnotations();
             }
         });
 
+        // Double click on canvas label to show popup
+        function determineLabelAndShowPopup(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            const clickedIndex = findLabelAtPosition(x, y);
+            if (clickedIndex !== -1) {
+                selectLabel(clickedIndex);
+                showPopup(clickedIndex);
+            }
+        }
+
         function findLabelAtPosition(x, y) {
+            var retLabelIndex = -1;
+            var minArea = Number.MAX_SAFE_INTEGER;
             for (let i = currentLabels.length - 1; i >= 0; i--) {
                 const label = currentLabels[i];
                 const lx = (label.cx - label.w / 2) * canvas.width;
@@ -602,10 +684,15 @@
                 const lh = label.h * canvas.height;
 
                 if (x >= lx && x <= lx + lw && y >= ly && y <= ly + lh) {
-                    return i;
+                    const newArea = lw * lh;
+                    if (newArea < minArea) {
+                        minArea = newArea;
+                        retLabelIndex = i;
+                    }
                 }
             }
-            return -1;
+
+            return retLabelIndex;
         }
 
         // Keyboard shortcuts
@@ -650,6 +737,7 @@
         // Handle window resize
         window.addEventListener('resize', () => {
             setTimeout(setupCanvas, 100);
+            setTimeout(redrawAnnotations, 100);
         });
 
         // Handle messages from extension
@@ -657,34 +745,54 @@
             const message = e.data;
             switch (message.command) {
                 case 'labelsLoaded':
+                    console.log(`labelsLoaded got called: ${message.labels}`);
                     currentLabels = message.labels || [];
                     classNames = message.classes || classNames;
                     updateLabelsList();
                     redrawAnnotations();
                     break;
+
                 case 'labelsSaved':
                     showStatus('Labels saved successfully', false);
                     break;
+
                 case 'error':
                     showStatus(message.message, true);
                     break;
-                
-                case 'updateImage':
-                    document.getElementById('imageContainer').innerHTML = message.html;
-                    const info = message.info;
-                    document.getElementById('imageInfo').textContent = `${info.index + 1} / ${info.total}`;
+
+                case 'updateLabelClassAfterChoice':
+                    console.log(`inside updateLabelClassAfterChoice: labelIndex:${message.labelIndex}, className: ${message.className}`);
+                    if (currentLabels[message.labelIndex].classId === -1) {
+                        showStatus('Labels Added', false);
+                    }
+                    selectedClassIndex = classNames.findIndex((elem) => elem === message.className);
+                    currentLabels[message.labelIndex].classId = selectedClassIndex;
+                    updateLabelsList();
+                    redrawAnnotations();
                     break;
+
+                case 'updateImage':
+                    console.log('inside updateImage: Updating image with new html');
+                    imageContainer.innerHTML = message.html;
+                    const info = message.info;
+                    imageInfo.textContent = `${info.index + 1} / ${info.total}`;
+                    setTimeout(setupCanvas, 50);
+                    // setupCanvas();
+                    break;
+
                 case 'cacheStatus':
-                    document.getElementById('cacheInfo').textContent = `Cached: ${message.status.cached}`;
+                    imageInfo.textContent = `Cached: ${message.status.cached}`;
                     break;
             }
         });
 
-        // Initialize
-        if (image.complete) {
-            setupCanvas();
-            loadImageLabels();
-        }
+        // Initialize - just request current image, don't assume anything is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            vscode.postMessage({
+                command: 'getCurrentImage',
+                sendLabels: true
+            });
+        });
     </script>
 </body>
 

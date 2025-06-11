@@ -12,7 +12,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private classesPath = '';
     private classes = new Array<string>();
     
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(private readonly context: vscode.ExtensionContext) { }
 
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -51,25 +51,24 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 vscode.Uri.file(path.join(this.context.extensionPath, 'media'))
             ]
         };
-        
+
         // Initalize image preloader
         this.imagePreloader = new preloader.ImagePreloader(webviewPanel.webview);
-        
-        // Create the overlay UI
-        webviewPanel.webview.html = this.getOverlayHTML(webviewPanel.webview, this.context.extensionPath, document.uri);
-        
-        // Set up message handling
-        this.setupMessageHandling(webviewPanel, document);
-        this.loadCalsses(document.uri);
-        
         await this.imagePreloader.initialize(
             path.dirname(document.uri.fsPath),
             document.uri.fsPath,
-            5,
-            2
+            2, // previous
+            5  // next
         );
+
+        this.loadCalsses(document.uri);
+        // Create the overlay UI
+        webviewPanel.webview.html = this.getOverlayHTML(webviewPanel.webview, this.context.extensionPath, document.uri);
+
+        // Set up message handling
+        this.setupMessageHandling(webviewPanel, document);
     }
-    
+
     private async loadCalsses(uri: vscode.Uri) {
         this.classesPath = path.join(path.dirname(uri.fsPath), 'classes.txt');
         if (!fs.existsSync(this.classesPath)) {
@@ -92,7 +91,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private getOverlayHTML(webview: vscode.Webview, extensionPath: string, imageUri: vscode.Uri): string {
         const nonce = this.getNonce();
         const imageWebviewUri = webview.asWebviewUri(imageUri);
-        
+
         console.log("In funciton getOverlayHTML:");
         console.log("Extension URI:", extensionPath);
         console.log("Image URI:", imageUri.fsPath);
@@ -101,21 +100,52 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             // Path to your HTML file
             const htmlPath = vscode.Uri.file(path.join(extensionPath, 'media', 'html', 'overlay.html'));
             let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
-    
+
             // Replace placeholders in the HTML content
             htmlContent = htmlContent.replace(/\$\{nonce\}/g, nonce);
-            htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
-            htmlContent = htmlContent.replace(/\$\{imageUri.fsPath\}/g, imageUri.fsPath);
+            // htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
+            // htmlContent = htmlContent.replace(/\$\{imageUri.fsPath\}/g, imageUri.fsPath);
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
-            
+
             return htmlContent;
         } catch (error) {
             console.error("Error reading HTML file:", error);
             vscode.window.showErrorMessage("Failed to load the annotation editor. Please check the extension logs for details.");
         }
-        
+
         return "<h1>Error loading editor</h1>";
     }
+
+    private async showClassInputPrompt(webview: vscode.Webview,  labelIndex: number) {
+        console.log(`Showing popup prompt for label index: ${labelIndex}`);
+
+        if (!this.classes || this.classes.length === 0) {
+            vscode.window.showErrorMessage("Class list is empty or not loaded.");
+            return;
+        }
+
+        const selectedClass = await vscode.window.showQuickPick(this.classes, {
+            placeHolder: 'Select or enter a class name',
+            canPickMany: false,
+            ignoreFocusOut: true
+        });
+
+        if (selectedClass) {
+            // Post message back to the webview with selected class
+            if (webview) {
+                webview.postMessage({
+                    command: 'updateLabelClassAfterChoice',
+                    labelIndex: labelIndex,
+                    className: selectedClass
+                });
+            } else {
+                console.warn("No active webview panel to post message.");
+            }
+        } else {
+            console.log("User cancelled class selection prompt.");
+        }
+    }
+
 
     private async setupMessageHandling(webviewPanel: vscode.WebviewPanel, document: YOLOImageDocument): Promise<void> {
         // Batch operations for better remote performance
@@ -123,47 +153,47 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         let saveTimeout: NodeJS.Timeout;
 
         const flushPendingSaves = async () => {
-            if (pendingSaves.size === 0) {return;}
-            
+            if (pendingSaves.size === 0) { return; }
+
             const savePromises = Array.from(pendingSaves.entries()).map(
                 ([imagePath, labels]) => this.saveLabelsForImage(imagePath, labels)
             );
-            
+
             try {
                 await Promise.all(savePromises);
-                webviewPanel.webview.postMessage({ 
+                webviewPanel.webview.postMessage({
                     command: 'batchSaveComplete',
-                    count: pendingSaves.size 
+                    count: pendingSaves.size
                 });
             } catch (error) {
-                webviewPanel.webview.postMessage({ 
-                    command: 'error', 
-                    message: 'Batch save failed' 
+                webviewPanel.webview.postMessage({
+                    command: 'error',
+                    message: 'Batch save failed'
                 });
             }
-            
+
             pendingSaves.clear();
         };
 
         webviewPanel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'loadLabels':
-                    const labels = await this.loadLabelsForImage(message.imagePath);
+                    const labels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
                     webviewPanel.webview.postMessage({
                         command: 'labelsLoaded',
                         labels: labels,
                         classes: this.classes
                     });
                     break;
-                    
+
                 case 'saveLabels':
                     // Batch saves for remote efficiency
                     pendingSaves.set(message.imagePath, message.labels);
-                    
-                    if (saveTimeout) {clearTimeout(saveTimeout);}
+
+                    if (saveTimeout) { clearTimeout(saveTimeout); }
                     saveTimeout = setTimeout(flushPendingSaves, 2000); // Batch for 2 seconds
                     break;
-                    
+
                 case 'forceSave':
                     // Immediate save for critical operations
                     if (saveTimeout) {
@@ -171,12 +201,26 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         await flushPendingSaves();
                     }
                     break;
-                    
-                case 'preloadNextImage':
-                    // Preload next image for smoother navigation
-                    this.preloadImageLabels(message.nextImagePath);
+
+                case 'getCurrentImage':
+                    const currentHTML = this.imagePreloader?.getCurrentImageHTML();
+                    const currentInfo = this.imagePreloader?.getCurrentImageInfo();
+                    webviewPanel.webview.postMessage({
+                        command: 'updateImage',
+                        html: currentHTML,
+                        info: currentInfo
+                    });
+                    if (message.sendLabels) {
+                        const currentLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
+                        webviewPanel.webview.postMessage({
+                            command: 'labelsLoaded',
+                            labels: currentLabels,
+                            classes: this.classes
+                        });
+                    }
                     break;
-                
+
+
                 case 'nextImage':
                     const nextHTML = await this.imagePreloader?.goToNext();
                     const nextInfo = this.imagePreloader?.getCurrentImageInfo();
@@ -185,6 +229,14 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         html: nextHTML,
                         info: nextInfo
                     });
+                    if (message.sendLabels) {
+                        const nextLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
+                        webviewPanel.webview.postMessage({
+                            command: 'labelsLoaded',
+                            labels: nextLabels,
+                            classes: this.classes
+                        });
+                    }
                     break;
 
                 case 'prevImage':
@@ -195,6 +247,14 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         html: prevHTML,
                         info: prevInfo
                     });
+                    if (message.sendLabels) {
+                        const prevLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
+                        webviewPanel.webview.postMessage({
+                            command: 'labelsLoaded',
+                            labels: prevLabels,
+                            classes: this.classes
+                        });
+                    }
                     break;
 
                 case 'gotoImage':
@@ -205,6 +265,14 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         html: gotoHTML,
                         info: gotoInfo
                     });
+                    if (message.sendLabels) {
+                        const gotoLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
+                        webviewPanel.webview.postMessage({
+                            command: 'labelsLoaded',
+                            labels: gotoLabels,
+                            classes: this.classes
+                        });
+                    }
                     break;
 
                 case 'getCacheStatus':
@@ -214,27 +282,34 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         status: status
                     });
                     break;
+
+                case 'editClassOfLabel':
+                    this.showClassInputPrompt(webviewPanel.webview, message.labelIndex);
+                    break;
             }
         });
     }
 
     private async loadLabelsForImage(imagePath: string): Promise<any[]> {
         try {
+            console.log(`loadLabelsForImage: ${imagePath}`);
             const labelPath = this.getLabelsPath(imagePath);
-            
+            console.log(`loadLabelsForImage: labelPath:${labelPath}`);
+
             // Cache check for remote performance
             const cacheKey = `labels_${path.basename(labelPath)}`;
             const cached = this.labelCache.get(cacheKey);
             if (cached && cached.mtime === await this.getFileModTime(labelPath)) {
                 return cached.labels;
             }
-            
+
             const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
             const labels = labelContent
                 .split('\n')
                 .filter(line => line.trim())
                 .map(line => {
                     const parts = line.split(' ');
+                    console.log(`parts: ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[3]}, ${parts[4]}`);
                     return {
                         classId: parseInt(parts[0]),
                         cx: parseFloat(parts[1]),
@@ -243,11 +318,13 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         h: parseFloat(parts[4])
                     };
                 });
-            
+
             // Cache the result
             const mtime = await this.getFileModTime(labelPath);
             this.labelCache.set(cacheKey, { labels, mtime });
-            
+
+            console.log(`loadLabelsForImage: found labels: ${labels}`);
+
             return labels;
         } catch (error) {
             return [];
@@ -269,7 +346,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             const content = labels
                 .map(l => `${l.classId} ${l.cx.toFixed(6)} ${l.cy.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)}`)
                 .join('\n');
-                
+
             await fs.promises.mkdir(path.dirname(labelPath), { recursive: true });
             await fs.promises.writeFile(labelPath, content);
             return true;
@@ -281,20 +358,10 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private getLabelsPath(imagePath: string): string {
         const dir = path.dirname(imagePath);
         const name = path.basename(imagePath, path.extname(imagePath));
-        
+
         // Use the predictAsumedLabelsDirPath logic here
         const labelsDir = dir.replace(`${path.sep}images${path.sep}`, `${path.sep}labels${path.sep}`);
         return path.join(labelsDir, `${name}.txt`);
-    }
-
-    private async preloadImageLabels(imagePath: string): Promise<void> {
-        // Preload labels for performance optimization
-        try {
-            await this.loadLabelsForImage(imagePath);
-            console.log(`Preloaded labels for: ${path.basename(imagePath)}`);
-        } catch (error) {
-            console.warn(`Failed to preload labels for: ${imagePath}`, error);
-        }
     }
 
     private getNonce(): string {
@@ -308,7 +375,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 }
 
 class YOLOImageDocument implements vscode.CustomDocument {
-    constructor(public readonly uri: vscode.Uri) {}
+    constructor(public readonly uri: vscode.Uri) { }
 
     dispose(): void {
         // Cleanup if needed
