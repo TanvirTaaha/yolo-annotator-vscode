@@ -11,7 +11,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private labelCache = new Map<string, { labels: any[], mtime: number }>();
     private classesPath = '';
     private classes = new Array<string>();
-    
+
     constructor(private readonly context: vscode.ExtensionContext) { }
 
 
@@ -116,7 +116,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         return "<h1>Error loading editor</h1>";
     }
 
-    private async showClassInputPrompt(webview: vscode.Webview,  labelIndex: number) {
+    private async showClassInputPrompt(webview: vscode.Webview, labelIndex: number, prevClassIndex: number) {
         console.log(`Showing popup prompt for label index: ${labelIndex}`);
 
         if (!this.classes || this.classes.length === 0) {
@@ -124,10 +124,24 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             return;
         }
 
-        const selectedClass = await vscode.window.showQuickPick(this.classes, {
+        const currentClass = prevClassIndex === -1 ? '' : this.classes[prevClassIndex];
+        const quickPickItems: vscode.QuickPickItem[] = [
+            {
+                label: currentClass,
+                description: 'Currently selected'
+            },
+            ...this.classes
+                .filter(className => className !== currentClass)
+                .map(className => ({
+                    label: className,
+                    description: undefined
+                }))];
+
+        const selectedClass = await vscode.window.showQuickPick(quickPickItems, {
+            title: 'Select class for the selected Label',
             placeHolder: 'Select or enter a class name',
             canPickMany: false,
-            ignoreFocusOut: true
+            ignoreFocusOut: false
         });
 
         if (selectedClass) {
@@ -284,7 +298,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'editClassOfLabel':
-                    this.showClassInputPrompt(webviewPanel.webview, message.labelIndex);
+                    this.showClassInputPrompt(webviewPanel.webview, message.labelIndex, message.prevClassIndex);
                     break;
             }
         });

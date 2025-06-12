@@ -535,7 +535,8 @@
             popupTargetIndex = index;
             vscode.postMessage({
                 command: 'editClassOfLabel',
-                labelIndex: index
+                labelIndex: index,
+                prevClassIndex: currentLabels[index].classId
             });
         }
 
@@ -586,6 +587,7 @@
             });
         });
 
+        var canvasClicked = false;
         // Canvas interaction
         canvas.addEventListener('mousedown', (e) => {
             if (drawingMode) {
@@ -607,13 +609,21 @@
                         unSelectLabel();
                         break;
                     case selectedLabelIndex:
-                        showPopup(clickedIndex);
+                        if (!canvasClicked) unSelectLabel();
                         break;
                     default:
                         selectLabel(clickedIndex);
                         break;
                 }
-
+                if (!canvasClicked) {
+                    // Register first click
+                    canvasClicked = true;
+                }
+                else {// Double click
+                    selectLabel(clickedIndex);
+                    showPopup(clickedIndex);
+                }
+                setTimeout(() => canvasClicked = false, 500); // After a while forget the first click
             }
         });
 
