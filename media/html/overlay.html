@@ -273,6 +273,18 @@
             color: #00aeff;
             font-weight: bold;
         }
+
+        #notSaved {
+        	display: none;
+        }
+        
+        #notSaved.show {
+        	display: flex;
+            flex-wrap: wrap;
+            color: #ff0000;
+            font-weight: bold;
+            justify-content: center;
+        }
     </style>
 </head>
 
@@ -321,13 +333,16 @@
             </div>
 
             <!-- Quick Actions -->
-            <div class="control-section">
+            <!-- <div class="control-section">
                 <h4>Actions</h4>
                 <div class="button-group">
                     <button id="clearAllBtn" class="danger" title="Clear All Labels">Clear All</button>
                     <button id="autoSuggestBtn" title="Auto-suggest based on similar images" disabled>AI
                         Suggest</button>
                 </div>
+            </div> -->
+            <div class="control-section">
+                <div id="notSaved"><span>*Not saved</span></div>
             </div>
         </div>
     </div>
@@ -755,7 +770,7 @@
             const message = e.data;
             switch (message.command) {
                 case 'labelsLoaded':
-                    console.log(`labelsLoaded got called: ${message.labels}`);
+                    // console.log(`labelsLoaded got called: ${message.labels}`);
                     currentLabels = message.labels || [];
                     classNames = message.classes || classNames;
                     updateLabelsList();
@@ -782,12 +797,16 @@
                     break;
 
                 case 'updateImage':
-                    console.log('inside updateImage: Updating image with new html');
+                    // Process Image
                     imageContainer.innerHTML = message.html;
                     const info = message.info;
                     imageInfo.textContent = `${info.index + 1} / ${info.total}`;
                     setTimeout(setupCanvas, 50);
-                    // setupCanvas();
+                    // Process Labels
+                    currentLabels = message.labels || [];
+                    classNames = message.classes || classNames;
+                    updateLabelsList();
+                    redrawAnnotations();
                     break;
 
                 case 'cacheStatus':

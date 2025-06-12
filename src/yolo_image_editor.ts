@@ -192,7 +192,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         webviewPanel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'loadLabels':
-                    const labels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
+                    const labels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'labelsLoaded',
                         labels: labels,
@@ -219,74 +219,54 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 case 'getCurrentImage':
                     const currentHTML = this.imagePreloader?.getCurrentImageHTML();
                     const currentInfo = this.imagePreloader?.getCurrentImageInfo();
+                    const currentLabels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
                         html: currentHTML,
-                        info: currentInfo
+                        info: currentInfo,
+                        labels: currentLabels,
+                        classes: this.classes
                     });
-                    if (message.sendLabels) {
-                        const currentLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
-                        webviewPanel.webview.postMessage({
-                            command: 'labelsLoaded',
-                            labels: currentLabels,
-                            classes: this.classes
-                        });
-                    }
                     break;
 
 
                 case 'nextImage':
                     const nextHTML = await this.imagePreloader?.goToNext();
                     const nextInfo = this.imagePreloader?.getCurrentImageInfo();
+                    const nextLabels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
                         html: nextHTML,
-                        info: nextInfo
+                        info: nextInfo,
+                        labels: nextLabels,
+                        classes: this.classes 
                     });
-                    if (message.sendLabels) {
-                        const nextLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
-                        webviewPanel.webview.postMessage({
-                            command: 'labelsLoaded',
-                            labels: nextLabels,
-                            classes: this.classes
-                        });
-                    }
                     break;
 
                 case 'prevImage':
                     const prevHTML = await this.imagePreloader?.goToPrevious();
                     const prevInfo = this.imagePreloader?.getCurrentImageInfo();
+                    const prevLabels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
                         html: prevHTML,
-                        info: prevInfo
+                        info: prevInfo,
+                        labels: prevLabels,
+                        classes: this.classes
                     });
-                    if (message.sendLabels) {
-                        const prevLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
-                        webviewPanel.webview.postMessage({
-                            command: 'labelsLoaded',
-                            labels: prevLabels,
-                            classes: this.classes
-                        });
-                    }
                     break;
 
                 case 'gotoImage':
                     const gotoHTML = await this.imagePreloader?.goToIndex(message.index);
                     const gotoInfo = this.imagePreloader?.getCurrentImageInfo();
+                    const gotoLabels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
                         html: gotoHTML,
-                        info: gotoInfo
+                        info: gotoInfo,
+                        labels: gotoLabels,
+                        classes: this.classes
                     });
-                    if (message.sendLabels) {
-                        const gotoLabels = await this.loadLabelsForImage(this.imagePreloader?.getCurrentImagePath() || '');
-                        webviewPanel.webview.postMessage({
-                            command: 'labelsLoaded',
-                            labels: gotoLabels,
-                            classes: this.classes
-                        });
-                    }
                     break;
 
                 case 'getCacheStatus':
@@ -304,55 +284,55 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         });
     }
 
-    private async loadLabelsForImage(imagePath: string): Promise<any[]> {
-        try {
-            console.log(`loadLabelsForImage: ${imagePath}`);
-            const labelPath = this.getLabelsPath(imagePath);
-            console.log(`loadLabelsForImage: labelPath:${labelPath}`);
+    // private async loadLabelsForImage(imagePath: string): Promise<any[]> {
+    //     try {
+    //         console.log(`loadLabelsForImage: ${imagePath}`);
+    //         const labelPath = this.getLabelsPath(imagePath);
+    //         console.log(`loadLabelsForImage: labelPath:${labelPath}`);
 
-            // Cache check for remote performance
-            const cacheKey = `labels_${path.basename(labelPath)}`;
-            const cached = this.labelCache.get(cacheKey);
-            if (cached && cached.mtime === await this.getFileModTime(labelPath)) {
-                return cached.labels;
-            }
+    //         // Cache check for remote performance
+    //         const cacheKey = `labels_${path.basename(labelPath)}`;
+    //         const cached = this.labelCache.get(cacheKey);
+    //         if (cached && cached.mtime === await this.getFileModTime(labelPath)) {
+    //             return cached.labels;
+    //         }
 
-            const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
-            const labels = labelContent
-                .split('\n')
-                .filter(line => line.trim())
-                .map(line => {
-                    const parts = line.split(' ');
-                    console.log(`parts: ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[3]}, ${parts[4]}`);
-                    return {
-                        classId: parseInt(parts[0]),
-                        cx: parseFloat(parts[1]),
-                        cy: parseFloat(parts[2]),
-                        w: parseFloat(parts[3]),
-                        h: parseFloat(parts[4])
-                    };
-                });
+    //         const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
+    //         const labels = labelContent
+    //             .split('\n')
+    //             .filter(line => line.trim())
+    //             .map(line => {
+    //                 const parts = line.split(' ');
+    //                 console.log(`parts: ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[3]}, ${parts[4]}`);
+    //                 return {
+    //                     classId: parseInt(parts[0]),
+    //                     cx: parseFloat(parts[1]),
+    //                     cy: parseFloat(parts[2]),
+    //                     w: parseFloat(parts[3]),
+    //                     h: parseFloat(parts[4])
+    //                 };
+    //             });
 
-            // Cache the result
-            const mtime = await this.getFileModTime(labelPath);
-            this.labelCache.set(cacheKey, { labels, mtime });
+    //         // Cache the result
+    //         const mtime = await this.getFileModTime(labelPath);
+    //         this.labelCache.set(cacheKey, { labels, mtime });
 
-            console.log(`loadLabelsForImage: found labels: ${labels}`);
+    //         console.log(`loadLabelsForImage: found labels: ${labels}`);
 
-            return labels;
-        } catch (error) {
-            return [];
-        }
-    }
+    //         return labels;
+    //     } catch (error) {
+    //         return [];
+    //     }
+    // }
 
-    private async getFileModTime(filePath: string): Promise<number> {
-        try {
-            const stats = await fs.promises.stat(filePath);
-            return stats.mtime.getTime();
-        } catch {
-            return 0;
-        }
-    }
+    // private async getFileModTime(filePath: string): Promise<number> {
+    //     try {
+    //         const stats = await fs.promises.stat(filePath);
+    //         return stats.mtime.getTime();
+    //     } catch {
+    //         return 0;
+    //     }
+    // }
 
     private async saveLabelsForImage(imagePath: string, labels: any[]): Promise<boolean> {
         try {

@@ -11,6 +11,8 @@ export class ImagePreloader {
     private isPreloading = false;
     private keepBuffer = 5; // Number of images to keep in cache around current position
 
+    private labelCache = new Map<string, { labels: any[], mtime: number }>();
+
     constructor(private webview: vscode.Webview) {}
 
     // Initialize with directory and set current image
@@ -145,6 +147,7 @@ export class ImagePreloader {
                 const mimeType = this.getMimeType(imagePath);
                 const dataUrl = `data:${mimeType};base64,${base64}`;
                 this.imageBase64DataCache.set(imagePath, dataUrl);
+                this.loadLabelsForImage(imagePath);
             } catch (error) {
                 console.warn(`Failed to preload image: ${imagePath}`, error);
             }
@@ -168,6 +171,7 @@ export class ImagePreloader {
         for (const [imagePath] of this.imageBase64DataCache) {
             if (!imagesToKeep.has(imagePath)) {
                 this.imageBase64DataCache.delete(imagePath);
+                this.labelCache.delete(this.getLabelCacheKey(imagePath)); // delete their labels from cache too
             }
         }
     }
@@ -194,6 +198,76 @@ export class ImagePreloader {
             currentCached: currentImage ? this.imageBase64DataCache.has(currentImage) : false
         };
     }
+
+    private getLabelsPath(imagePath: string): string {
+        const dir = path.dirname(imagePath);
+        const name = path.basename(imagePath, path.extname(imagePath));
+
+        // Use the predictAsumedLabelsDirPath logic here
+        const labelsDir = dir.replace(`${path.sep}images${path.sep}`, `${path.sep}labels${path.sep}`);
+        return path.join(labelsDir, `${name}.txt`);
+    }
+
+    private async getFileModTime(filePath: string): Promise<number> {
+        try {
+            const stats = await fs.promises.stat(filePath);
+            return stats.mtime.getTime();
+        } catch {
+            return 0;
+        }
+    }
+
+    private async loadLabelsForImage(imagePath: string): Promise<{classId: number, cx: number, cy: number, w: number, h: number}[]> {
+        try {
+            // console.log(`loadLabelsForImage: ${imagePath}`);
+            const labelPath = this.getLabelsPath(imagePath);
+            // console.log(`loadLabelsForImage: labelPath:${labelPath}`);
+
+            // Cache check for remote performance
+            const cacheKey = this.getLabelCacheKey(imagePath);
+            const cached = this.labelCache.get(cacheKey);
+            if (cached && cached.mtime === await this.getFileModTime(labelPath)) {
+                return cached.labels;
+            }
+
+            const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
+            const labels = labelContent
+                .split('\n')
+                .filter(line => line.trim())
+                .map(line => {
+                    const parts = line.split(' ');
+                    console.log(`parts: ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[3]}, ${parts[4]}`);
+                    return {
+                        classId: parseInt(parts[0]),
+                        cx: parseFloat(parts[1]),
+                        cy: parseFloat(parts[2]),
+                        w: parseFloat(parts[3]),
+                        h: parseFloat(parts[4])
+                    };
+                });
+
+            // Cache the result
+            const mtime = await this.getFileModTime(labelPath);
+            this.labelCache.set(cacheKey, { labels, mtime });
+
+            console.log(`loadLabelsForImage: found labels: ${labels}`);
+
+            return labels;
+        } catch (error) {
+            return [];
+        }
+    }
+
+    private getLabelCacheKey(imagePath: string): string {
+        const labelPath = this.getLabelsPath(imagePath);
+        return `labels_${path.basename(labelPath)}`;
+    }
+
+    public getCurrentLabel() : Promise<{classId: number, cx: number, cy: number, w: number, h: number}[]> {
+        const currentPath = this.imageFiles[this.currentIndex];
+        return this.loadLabelsForImage(currentPath);
+    }
+
 }
 
 // // Usage in your extension
