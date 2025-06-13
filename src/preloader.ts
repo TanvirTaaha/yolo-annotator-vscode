@@ -1,0 +1,452 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+
+
+export class ImagePreloader {
+    private imageBase64DataCache = new Map<string, string>();
+    private imageFiles: string[] = [];
+    private currentIndex = 0;
+    private preloadRadius = { next: 3, prev: 2 }; // Default values
+    private isPreloading = false;
+    private keepBuffer = 5; // Number of images to keep in cache around current position
+
+    private labelCache = new Map<string, { labels: any[], mtime: number }>();
+
+    constructor(private webview: vscode.Webview) {}
+
+    // Initialize with directory and set current image
+    public async initialize(directoryPath: string, currentImagePath: string, prevCount = 2, nextCount = 3): Promise<void> {
+        this.preloadRadius = { next: nextCount, prev: prevCount };
+        
+        // Get all image files from directory
+        const files = await fs.promises.readdir(directoryPath);
+        this.imageFiles = files
+            .filter(file => /\.(jpg|jpeg|png|bmp|webp)$/i.test(file))
+            .map(file => path.join(directoryPath, file))
+            .sort(); // Sort for consistent ordering
+
+        // Find current image index
+        this.currentIndex = this.imageFiles.findIndex(file => file === currentImagePath);
+        if (this.currentIndex === -1) {
+            this.currentIndex = 0;
+        }
+
+        // Start preloading around current image
+        await this.preloadAroundCurrent();
+    }
+
+    //Get the current Image path
+    public getCurrentImagePath(): string {
+        return this.imageFiles[this.currentIndex];
+    }
+
+    // Get HTML for current image (instant if cached)
+    public getCurrentImageHTML(): string {
+        const currentImage = this.imageFiles[this.currentIndex];
+        if (!currentImage) {return '<div>No image found</div>';}
+
+        const cached = this.imageBase64DataCache.get(currentImage);
+        if (cached) {
+            return `<img src="${cached}" alt="Current Image" class="main-image" id="mainImage" />`;
+        }
+
+        // Fallback to webview URI if not cached yet
+        const imageUri = vscode.Uri.file(currentImage);
+        const webviewUri = this.webview.asWebviewUri(imageUri);
+        return `<img src="${webviewUri}" alt="Current Image" class="main-image" id="mainImage" />`;
+    }
+
+    // Navigate to next image
+    public async goToNext(): Promise<string> {
+        if (this.currentIndex < this.imageFiles.length - 1) {
+            this.currentIndex++;
+            await this.preloadAroundCurrent();
+        }
+        return this.getCurrentImageHTML();
+    }
+
+    // Navigate to previous image
+    public async goToPrevious(): Promise<string> {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            await this.preloadAroundCurrent();
+        }
+        return this.getCurrentImageHTML();
+    }
+
+    // Jump to specific index
+    public async goToIndex(index: number): Promise<string> {
+        if (index >= 0 && index < this.imageFiles.length) {
+            this.currentIndex = index;
+            await this.preloadAroundCurrent();
+        }
+        return this.getCurrentImageHTML();
+    }
+
+    // Get current image info
+    public getCurrentImageInfo(): { path: string; index: number; total: number; filename: string } {
+        const currentPath = this.imageFiles[this.currentIndex] || '';
+        return {
+            path: currentPath,
+            index: this.currentIndex,
+            total: this.imageFiles.length,
+            filename: path.basename(currentPath)
+        };
+    }
+
+    // Preload images around current position
+    private async preloadAroundCurrent(): Promise<void> {
+        if (this.isPreloading) {return;}
+        this.isPreloading = true;
+
+        try {
+            const imagesToPreload: string[] = [];
+            
+            // Add current image
+            imagesToPreload.push(this.imageFiles[this.currentIndex]);
+            
+            // Add next images
+            for (let i = 1; i <= this.preloadRadius.next; i++) {
+                const nextIndex = this.currentIndex + i;
+                if (nextIndex < this.imageFiles.length) {
+                    imagesToPreload.push(this.imageFiles[nextIndex]);
+                }
+            }
+            
+            // Add previous images
+            for (let i = 1; i <= this.preloadRadius.prev; i++) {
+                const prevIndex = this.currentIndex - i;
+                if (prevIndex >= 0) {
+                    imagesToPreload.push(this.imageFiles[prevIndex]);
+                }
+            }
+
+            // Preload images that aren't already cached
+            const uncachedImages = imagesToPreload.filter(img => !this.imageBase64DataCache.has(img));
+            
+            if (uncachedImages.length > 0) {
+                await this.preloadImages(uncachedImages);
+            }
+
+            // Clean up old cached images to manage memory
+            this.cleanupDistantImages();
+            
+        } finally {
+            this.isPreloading = false;
+        }
+    }
+
+    // Preload specific images
+    private async preloadImages(imagePaths: string[]): Promise<void> {
+        const loadPromises = imagePaths.map(async (imagePath) => {
+            try {
+                const buffer = await fs.promises.readFile(imagePath);
+                const base64 = buffer.toString('base64');
+                const mimeType = this.getMimeType(imagePath);
+                const dataUrl = `data:${mimeType};base64,${base64}`;
+                this.imageBase64DataCache.set(imagePath, dataUrl);
+                this.loadLabelsForImage(imagePath);
+            } catch (error) {
+                console.warn(`Failed to preload image: ${imagePath}`, error);
+            }
+        });
+
+        await Promise.all(loadPromises);
+    }
+
+    // Clean up images that are far from current position to manage memory
+    private cleanupDistantImages(): void {
+        const imagesToKeep = new Set<string>();
+        
+        // Mark images to keep
+        for (let i = Math.max(0, this.currentIndex - (this.preloadRadius.prev + this.keepBuffer)); 
+             i <= Math.min(this.imageFiles.length - 1, this.currentIndex + (this.preloadRadius.next + this.keepBuffer)); 
+             i++) {
+            imagesToKeep.add(this.imageFiles[i]);
+        }
+
+        // Remove distant images from cache
+        for (const [imagePath] of this.imageBase64DataCache) {
+            if (!imagesToKeep.has(imagePath)) {
+                this.imageBase64DataCache.delete(imagePath);
+                this.labelCache.delete(this.getLabelCacheKey(imagePath)); // delete their labels from cache too
+            }
+        }
+    }
+
+    // Get MIME type for image
+    private getMimeType(filePath: string): string {
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes: { [key: string]: string } = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp'
+        };
+        return mimeTypes[ext] || 'image/jpeg';
+    }
+
+    // Get cache status for debugging
+    public getCacheStatus(): { cached: number; total: number; currentCached: boolean } {
+        const currentImage = this.imageFiles[this.currentIndex];
+        return {
+            cached: this.imageBase64DataCache.size,
+            total: this.imageFiles.length,
+            currentCached: currentImage ? this.imageBase64DataCache.has(currentImage) : false
+        };
+    }
+
+    private getLabelsPath(imagePath: string): string {
+        const dir = path.dirname(imagePath);
+        const name = path.basename(imagePath, path.extname(imagePath));
+        
+        const sameFolderLabels = path.join(dir, `${name}.txt`);
+        if (fs.existsSync(sameFolderLabels)) {
+            console.log(`labels path found in same folder:${sameFolderLabels}`);
+            return sameFolderLabels;
+        }
+
+        const dir_parts = dir.split(path.sep);
+        const lastImagesFolderIndex = dir_parts.lastIndexOf('images');
+        if (lastImagesFolderIndex !== -1) {
+            dir_parts[lastImagesFolderIndex] = 'labels';
+        }
+        const labelsDir = dir_parts.join(path.sep);
+        console.log(`labels path NOT FOUND in same folder:${sameFolderLabels}`);
+        
+        return path.join(labelsDir, `${name}.txt`);
+    }
+
+    private async getFileModTime(filePath: string): Promise<number> {
+        try {
+            const stats = await fs.promises.stat(filePath);
+            return stats.mtime.getTime();
+        } catch {
+            return 0;
+        }
+    }
+
+    private async loadLabelsForImage(imagePath: string): Promise<{classId: number, cx: number, cy: number, w: number, h: number}[]> {
+        try {
+            const labelPath = this.getLabelsPath(imagePath);
+            
+            // Cache check for remote performance
+            const cacheKey = this.getLabelCacheKey(imagePath);
+            const cached = this.labelCache.get(cacheKey);
+            if (cached && cached.mtime >= await this.getFileModTime(labelPath)) {
+                return cached.labels;
+            }
+            if (!fs.existsSync(labelPath)) {
+                console.warn(`labels.txt not found for ${imagePath}`);
+                return [];
+            }
+            const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
+            const labels = labelContent
+                .split('\n')
+                .filter(line => line.trim())
+                .map(line => {
+                    const parts = line.split(' ');
+                    return {
+                        classId: parseInt(parts[0]),
+                        cx: parseFloat(parts[1]),
+                        cy: parseFloat(parts[2]),
+                        w: parseFloat(parts[3]),
+                        h: parseFloat(parts[4])
+                    };
+                });
+
+            // Cache the result
+            const mtime = await this.getFileModTime(labelPath);
+            this.labelCache.set(cacheKey, { labels, mtime });
+            return labels;
+        } catch (error) {
+            console.warn(`labels.txt not found for ${imagePath}`);
+            return [];
+        }
+    }
+
+    private getLabelCacheKey(imagePath: string): string {
+        const labelPath = this.getLabelsPath(imagePath);
+        return `labels_${path.basename(labelPath)}`;
+    }
+
+    public getCurrentLabel() : Promise<{classId: number, cx: number, cy: number, w: number, h: number}[]> {
+        const currentPath = this.imageFiles[this.currentIndex];
+        return this.loadLabelsForImage(currentPath);
+    }
+
+    public removeLabelCache(imagePath: string) {
+        this.labelCache.delete(this.getLabelCacheKey(imagePath));
+    }
+
+    public async saveLabelsForImage(labels: any[]): Promise<boolean> {
+        try {
+            const imagePath = this.imageFiles[this.currentIndex];
+            const labelPath = this.getLabelsPath(imagePath);
+            const content = labels
+                .map(l => `${l.classId} ${l.cx.toFixed(6)} ${l.cy.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)}`)
+                .join('\n');
+
+            await fs.promises.mkdir(path.dirname(labelPath), { recursive: true });
+            await fs.promises.writeFile(labelPath, content);
+            this.removeLabelCache(imagePath);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+}
+
+// // Usage in your extension
+// export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
+//     private imagePreloader?: ImagePreloader;
+
+//     public async resolveCustomEditor(
+//         document: YOLOImageDocument,
+//         webviewPanel: vscode.WebviewPanel,
+//         token: vscode.CancellationToken
+//     ): Promise<void> {
+//         // Initialize webview
+//         webviewPanel.webview.options = {
+//             enableScripts: true,
+//             localResourceRoots: [vscode.Uri.file(path.dirname(document.uri.fsPath))]
+//         };
+
+//         // Initialize image preloader
+//         this.imagePreloader = new ImagePreloader(webviewPanel.webview);
+        
+//         const directoryPath = path.dirname(document.uri.fsPath);
+//         await this.imagePreloader.initialize(
+//             directoryPath, 
+//             document.uri.fsPath, 
+//             3, // preload 3 next images
+//             2  // preload 2 previous images
+//         );
+
+//         // Set initial HTML
+//         webviewPanel.webview.html = this.getWebviewHTML();
+
+//         // Setup message handling
+//         this.setupMessageHandling(webviewPanel);
+//     }
+
+//     private setupMessageHandling(webviewPanel: vscode.WebviewPanel): void {
+//         webviewPanel.webview.onDidReceiveMessage(async (message) => {
+//             if (!this.imagePreloader) {return;}
+
+//             switch (message.command) {
+//                 case 'nextImage':
+//                     const nextHTML = await this.imagePreloader.goToNext();
+//                     const nextInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: nextHTML,
+//                         info: nextInfo
+//                     });
+//                     break;
+
+//                 case 'prevImage':
+//                     const prevHTML = await this.imagePreloader.goToPrevious();
+//                     const prevInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: prevHTML,
+//                         info: prevInfo
+//                     });
+//                     break;
+
+//                 case 'gotoImage':
+//                     const gotoHTML = await this.imagePreloader.goToIndex(message.index);
+//                     const gotoInfo = this.imagePreloader.getCurrentImageInfo();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'updateImage',
+//                         html: gotoHTML,
+//                         info: gotoInfo
+//                     });
+//                     break;
+
+//                 case 'getCacheStatus':
+//                     const status = this.imagePreloader.getCacheStatus();
+//                     webviewPanel.webview.postMessage({
+//                         command: 'cacheStatus',
+//                         status: status
+//                     });
+//                     break;
+//             }
+//         });
+//     }
+
+//     private getWebviewHTML(): string {
+//         const initialHTML = this.imagePreloader?.getCurrentImageHTML() || '';
+//         const initialInfo = this.imagePreloader?.getCurrentImageInfo() || { index: 0, total: 0, filename: '' };
+
+//         return `
+//         <!DOCTYPE html>
+//         <html>
+//         <head>
+//             <style>
+//                 body { margin: 0; font-family: Arial, sans-serif; }
+//                 .container { display: flex; flex-direction: column; height: 100vh; }
+//                 .toolbar { background: #f0f0f0; padding: 10px; display: flex; gap: 10px; align-items: center; }
+//                 .image-container { flex: 1; display: flex; align-items: center; justify-content: center; }
+//                 .main-image { max-width: 100%; max-height: 100%; }
+//                 button { padding: 5px 10px; }
+//                 .info { margin-left: auto; }
+//             </style>
+//         </head>
+//         <body>
+//             <div class="container">
+//                 <div class="toolbar">
+//                     <button onclick="prevImage()">← Previous</button>
+//                     <button onclick="nextImage()">Next →</button>
+//                     <span id="info">${initialInfo.index + 1} / ${initialInfo.total} - ${initialInfo.filename}</span>
+//                     <div class="info">
+//                         <span id="cacheInfo">Loading...</span>
+//                     </div>
+//                 </div>
+//                 <div class="image-container" id="imageContainer">
+//                     ${initialHTML}
+//                 </div>
+//             </div>
+            
+//             <script>
+//                 const vscode = acquireVsCodeApi();
+                
+//                 function nextImage() {
+//                     vscode.postMessage({ command: 'nextImage' });
+//                 }
+                
+//                 function prevImage() {
+//                     vscode.postMessage({ command: 'prevImage' });
+//                 }
+                
+//                 // Keyboard navigation
+//                 document.addEventListener('keydown', (e) => {
+//                     if (e.key === 'ArrowRight') nextImage();
+//                     if (e.key === 'ArrowLeft') prevImage();
+//                 });
+                
+//                 // Handle messages from extension
+//                 window.addEventListener('message', (e) => {
+//                     const message = e.data;
+//                     if (message.command === 'updateImage') {
+//                         document.getElementById('imageContainer').innerHTML = message.html;
+//                         const info = message.info;
+//                         document.getElementById('info').textContent = 
+//                             \`\${info.index + 1} / \${info.total} - \${info.filename}\`;
+//                     }
+//                     if (message.command === 'cacheStatus') {
+//                         document.getElementById('cacheInfo').textContent = 
+//                             \`Cached: \${message.status.cached}\`;
+//                     }
+//                 });
+                
+//                 // Request initial cache status
+//                 vscode.postMessage({ command: 'getCacheStatus' });
+//             </script>
+//         </body>
+//         </html>`;
+//     }
+// }

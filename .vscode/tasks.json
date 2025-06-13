@@ -59,6 +59,15 @@
 				"npm: watch-tests"
 			],
 			"problemMatcher": []
-		}
+		},
+        {
+            "label": "npm: watch",
+            "type": "npm",
+            "script": "watch",
+            "isBackground": true,
+            "problemMatcher": [
+                "$tsc-watch"
+            ]
+        }
 	]
 }

@@ -2,7 +2,7 @@
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
-  "version": "1.0.6",
+  "version": "2.0.0",
   "publisher": "TanvirTaaha",
   "author": {
     "name": "Tanvir Hossain Taaha",
@@ -21,7 +21,8 @@
   },
   "categories": [
     "Machine Learning",
-    "Data Science",
+    "AI",
+    "Visualization",
     "Other"
   ],
   "keywords": [
@@ -44,36 +45,45 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "customEditors": [
+        {
+            "viewType": "yolo-annotator.imageEditor",
+            "displayName": "YOLO Image Annotator",
+            "selector": [
+                {
+                    "filenamePattern": "*.{jpg,jpeg,png,JPG,JPEG,PNG}"
+                }
+            ],
+            "priority": "option"
+        }
+    ],
     "commands": [
       {
+        "command": "yolo-annotator.openWithAnnotator",
+        "title": "Open with YOLO Annotator",
+        "icon": "assets/open_with_annotator.png"
+      },
+      {
         "command": "yolo-annotator.start",
-        "title": "Open YOLO Annotator",
-        "category": "YOLO Annotator",
-        "icon": "$(pencil)"
+        "title": "YOLO Annotator: Start"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "yolo-annotator.start",
-          "group": "navigation",
-          "when": "explorerResourceIsFolder"
+          "command": "yolo-annotator.openWithAnnotator",
+          "when": "resourceExtname =~ /\\.(jpg|jpeg|png|JPG|JPEG|PNG)$/",
+          "group": "navigation"
         }
       ],
-      "commandPalette": [
+      "editor/title": [
         {
-          "command": "yolo-annotator.start",
-          "title": "YOLO Annotator: Open Setup Window"
+          "command": "yolo-annotator.openWithAnnotator",
+          "when": "resourceExtname =~ /\\.(jpg|jpeg|png|JPG|JPEG|PNG)$/",
+          "group": "navigation"
         }
       ]
-    },
-    "keybindings": [
-      {
-        "command": "yolo-annotator.start",
-        "key": "ctrl+shift+y",
-        "mac": "cmd+shift+y"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -88,7 +98,8 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "debug-buffer": "node --trace-deprecation --trace-warnings npm run compile"
+    "debug-buffer": "node --trace-deprecation --trace-warnings npm run compile",
+    "install-local": "npm run compile && vsce package && code --install-extension $(ls *.vsix | sort -r | head -n1)"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
