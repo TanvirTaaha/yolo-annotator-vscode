@@ -274,16 +274,21 @@
             font-weight: bold;
         }
 
-        #notSaved {
-        	display: none;
+        #discardChanges {
+            display: none;
         }
-        
-        #notSaved.show {
-        	display: flex;
+
+        #discardChanges.show {
+            display: flex;
             flex-wrap: wrap;
             color: #ff0000;
             font-weight: bold;
             justify-content: center;
+        }
+
+        #discardChanges.show:hover {
+            text-decoration: underline;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -342,7 +347,7 @@
                 </div>
             </div> -->
             <div class="control-section">
-                <div id="notSaved"><span>*Not saved</span></div>
+                <div id="discardChanges" title="Discard unsaved changes"><span>Discard changes</span></div>
             </div>
         </div>
     </div>
@@ -377,10 +382,10 @@
         const imageInfo = document.getElementById('imageInfo');
         const addLabelBtn = document.getElementById('addLabelBtn');
         const saveBtn = document.getElementById('saveBtn');
-        const clearAllBtn = document.getElementById('clearAllBtn');
         const autoSuggestBtn = document.getElementById('autoSuggestBtn');
         const labelsList = document.getElementById('labelsList');
         const labelCount = document.getElementById('labelCount');
+        const discardChanges = document.getElementById('discardChanges');
 
         // State
         let currentLabels = [];
@@ -392,6 +397,7 @@
         let classNames = ['person', 'car', 'bicycle']; // Default classes
         let popupTargetIndex = -1; // Index of label to be edited
         let popupIsShowing = false;
+        let isDiscardChangesShown = false;
 
         function setupCanvas() {
             const image = document.getElementById('mainImage');
@@ -410,7 +416,6 @@
 
         function loadImageLabels() {
             // Request labels for current image
-            console.log('Loading labels for image: ${imageUri.fsPath}');
             vscode.postMessage({
                 command: 'loadLabels',
                 imagePath: '${imageUri.fsPath}'
@@ -418,7 +423,6 @@
         }
 
         function redrawAnnotations() {
-            console.log(`inside redrawAnnotations: ${currentLabels[0]}`);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw existing labels
@@ -531,6 +535,7 @@
             if (selectedLabelIndex >= index) {
                 selectedLabelIndex = selectedLabelIndex > 0 ? selectedLabelIndex - 1 : -1;
             }
+            showDiscardChangesText();
             updateLabelsList();
             redrawAnnotations();
             showStatus('Label deleted', false);
@@ -555,6 +560,20 @@
             });
         }
 
+        function showDiscardChangesText() {
+            isDiscardChangesShown = true;
+            discardChanges.classList.toggle('show', isDiscardChangesShown);
+            nextBtn.disabled = true;
+            prevBtn.disabled = true;
+        }
+
+        function hideDiscardChangesText() {
+            isDiscardChangesShown = false;
+            discardChanges.classList.toggle('show', isDiscardChangesShown);
+            nextBtn.disabled = false;
+            prevBtn.disabled = false;
+        }
+
         // Event Listeners
         // Panel collapse/expand
         collapseBtn.addEventListener('click', () => {
@@ -573,19 +592,15 @@
         saveBtn.addEventListener('click', () => {
             vscode.postMessage({
                 command: 'saveLabels',
-                imagePath: '${imageUri.fsPath}',
-                labels: currentLabels
+                newLabels: currentLabels
             });
         });
 
-        clearAllBtn.addEventListener('click', () => {
-            if (confirm('Clear all labels for this image?')) {
-                currentLabels = [];
-                selectedLabelIndex = -1;
-                updateLabelsList();
-                redrawAnnotations();
-                showStatus('All labels cleared', false);
-            }
+        discardChanges.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'showDiscardChangesChoice'
+            });
+
         });
 
         prevBtn.addEventListener('click', () => {
@@ -682,20 +697,15 @@
                 canvas.style.cursor = 'default';
                 controlPanel.classList.toggle('ghosted', drawingMode);
                 redrawAnnotations();
+                showDiscardChangesText();
             }
         });
 
-        // Double click on canvas label to show popup
-        function determineLabelAndShowPopup(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-            const clickedIndex = findLabelAtPosition(x, y);
-            if (clickedIndex !== -1) {
-                selectLabel(clickedIndex);
-                showPopup(clickedIndex);
-            }
+        function processLables(loadedLabels, loadedClasses) {
+            currentLabels = loadedLabels || [];
+            classNames = loadedClasses || classNames;
+            updateLabelsList();
+            redrawAnnotations();
         }
 
         function findLabelAtPosition(x, y) {
@@ -770,11 +780,7 @@
             const message = e.data;
             switch (message.command) {
                 case 'labelsLoaded':
-                    // console.log(`labelsLoaded got called: ${message.labels}`);
-                    currentLabels = message.labels || [];
-                    classNames = message.classes || classNames;
-                    updateLabelsList();
-                    redrawAnnotations();
+                    processLables(message.labels, message.classes);
                     break;
 
                 case 'labelsSaved':
@@ -786,14 +792,19 @@
                     break;
 
                 case 'updateLabelClassAfterChoice':
-                    console.log(`inside updateLabelClassAfterChoice: labelIndex:${message.labelIndex}, className: ${message.className}`);
-                    if (currentLabels[message.labelIndex].classId === -1) {
-                        showStatus('Labels Added', false);
-                    }
+                    if (!message.className || message.className == '') break;
+
                     selectedClassIndex = classNames.findIndex((elem) => elem === message.className);
-                    currentLabels[message.labelIndex].classId = selectedClassIndex;
-                    updateLabelsList();
-                    redrawAnnotations();
+                    if (selectedClassIndex !== currentLabels[message.labelIndex].classId) {
+                        if (currentLabels[message.labelIndex].classId === -1) {
+                            showStatus('Labels Added', false);
+                            selectedLabelIndex = -1;
+                        }
+                        currentLabels[message.labelIndex].classId = selectedClassIndex;
+                        showDiscardChangesText();
+                        updateLabelsList();
+                        redrawAnnotations();
+                    }
                     break;
 
                 case 'updateImage':
@@ -803,14 +814,35 @@
                     imageInfo.textContent = `${info.index + 1} / ${info.total}`;
                     setTimeout(setupCanvas, 50);
                     // Process Labels
-                    currentLabels = message.labels || [];
-                    classNames = message.classes || classNames;
-                    updateLabelsList();
-                    redrawAnnotations();
+                    processLables(message.labels, message.classes);
                     break;
 
                 case 'cacheStatus':
                     imageInfo.textContent = `Cached: ${message.status.cached}`;
+                    break;
+
+                case 'afterSave':
+                    if (message.result) {
+                        hideDiscardChangesText();
+                        showStatus("Saving success.", false);
+                    } else {
+                        showStatus("Error saving.", true);
+                    }
+                    break;
+
+                case 'discardChangesChoiceResult':
+                    switch (message.result) {
+                        case 'discard':
+                            hideDiscardChangesText();
+                            vscode.postMessage({
+                                command: 'loadLabels'
+                            });
+                            showStatus("Discarded.", true);
+                            break;
+                        case 'save':
+                            saveBtn.click();
+                            break;
+                    }
                     break;
             }
         });

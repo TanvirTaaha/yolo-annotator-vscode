@@ -127,7 +127,6 @@ export class ImagePreloader {
             
             if (uncachedImages.length > 0) {
                 await this.preloadImages(uncachedImages);
-                console.log(`Preloaded ${uncachedImages.length} images around index ${this.currentIndex}`);
             }
 
             // Clean up old cached images to manage memory
@@ -202,9 +201,21 @@ export class ImagePreloader {
     private getLabelsPath(imagePath: string): string {
         const dir = path.dirname(imagePath);
         const name = path.basename(imagePath, path.extname(imagePath));
+        
+        const sameFolderLabels = path.join(dir, `${name}.txt`);
+        if (fs.existsSync(sameFolderLabels)) {
+            console.log(`labels path found in same folder:${sameFolderLabels}`);
+            return sameFolderLabels;
+        }
 
-        // Use the predictAsumedLabelsDirPath logic here
-        const labelsDir = dir.replace(`${path.sep}images${path.sep}`, `${path.sep}labels${path.sep}`);
+        const dir_parts = dir.split(path.sep);
+        const lastImagesFolderIndex = dir_parts.lastIndexOf('images');
+        if (lastImagesFolderIndex !== -1) {
+            dir_parts[lastImagesFolderIndex] = 'labels';
+        }
+        const labelsDir = dir_parts.join(path.sep);
+        console.log(`labels path NOT FOUND in same folder:${sameFolderLabels}`);
+        
         return path.join(labelsDir, `${name}.txt`);
     }
 
@@ -219,24 +230,24 @@ export class ImagePreloader {
 
     private async loadLabelsForImage(imagePath: string): Promise<{classId: number, cx: number, cy: number, w: number, h: number}[]> {
         try {
-            // console.log(`loadLabelsForImage: ${imagePath}`);
             const labelPath = this.getLabelsPath(imagePath);
-            // console.log(`loadLabelsForImage: labelPath:${labelPath}`);
-
+            
             // Cache check for remote performance
             const cacheKey = this.getLabelCacheKey(imagePath);
             const cached = this.labelCache.get(cacheKey);
-            if (cached && cached.mtime === await this.getFileModTime(labelPath)) {
+            if (cached && cached.mtime >= await this.getFileModTime(labelPath)) {
                 return cached.labels;
             }
-
+            if (!fs.existsSync(labelPath)) {
+                console.warn(`labels.txt not found for ${imagePath}`);
+                return [];
+            }
             const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
             const labels = labelContent
                 .split('\n')
                 .filter(line => line.trim())
                 .map(line => {
                     const parts = line.split(' ');
-                    console.log(`parts: ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[3]}, ${parts[4]}`);
                     return {
                         classId: parseInt(parts[0]),
                         cx: parseFloat(parts[1]),
@@ -249,11 +260,9 @@ export class ImagePreloader {
             // Cache the result
             const mtime = await this.getFileModTime(labelPath);
             this.labelCache.set(cacheKey, { labels, mtime });
-
-            console.log(`loadLabelsForImage: found labels: ${labels}`);
-
             return labels;
         } catch (error) {
+            console.warn(`labels.txt not found for ${imagePath}`);
             return [];
         }
     }
@@ -268,6 +277,26 @@ export class ImagePreloader {
         return this.loadLabelsForImage(currentPath);
     }
 
+    public removeLabelCache(imagePath: string) {
+        this.labelCache.delete(this.getLabelCacheKey(imagePath));
+    }
+
+    public async saveLabelsForImage(labels: any[]): Promise<boolean> {
+        try {
+            const imagePath = this.imageFiles[this.currentIndex];
+            const labelPath = this.getLabelsPath(imagePath);
+            const content = labels
+                .map(l => `${l.classId} ${l.cx.toFixed(6)} ${l.cy.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)}`)
+                .join('\n');
+
+            await fs.promises.mkdir(path.dirname(labelPath), { recursive: true });
+            await fs.promises.writeFile(labelPath, content);
+            this.removeLabelCache(imagePath);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
 }
 
 // // Usage in your extension
