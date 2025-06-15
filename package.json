@@ -2,7 +2,7 @@
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "TanvirTaaha",
   "author": {
     "name": "Tanvir Hossain Taaha",
@@ -45,6 +45,41 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "YOLO Annotator",
+      "properties": {
+        "yoloAnnotator.preload.nextImages": {
+          "type": "number",
+          "default": 3,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "Number of next images to preload for faster navigation",
+          "scope": "resource"
+        },
+        "yoloAnnotator.preload.previousImages": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of previous images to preload for faster navigation",
+          "scope": "resource"
+        },
+        "yoloAnnotator.preload.keepBuffer": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "Number of images to keep in memory buffer around current position",
+          "scope": "resource"
+        },
+        "yoloAnnotator.ui.showShortcutsHelp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show keyboard shortcuts help panel",
+          "scope": "resource"
+        }
+      }
+    },
     "customEditors": [
         {
             "viewType": "yolo-annotator.imageEditor",

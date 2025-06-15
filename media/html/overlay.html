@@ -247,6 +247,7 @@
 
         /* Keyboard shortcuts help */
         .shortcuts-help {
+            display: block;
             position: fixed;
             bottom: 20px;
             left: 20px;
@@ -259,6 +260,10 @@
             z-index: 100;
             opacity: 0.2;
             transition: opacity 0.3s;
+        }
+
+        #shortcutHelp.hide {
+            display: none;
         }
 
         .shortcuts-help:hover {
@@ -356,7 +361,7 @@
     <div class="status-indicator" id="statusIndicator"></div>
 
     <!-- Keyboard Shortcuts Help -->
-    <div class="shortcuts-help">
+    <div class="shortcuts-help" id="shortcutHelp">
         <div class="shortcut-item"><span class="shortcut-key">A</span>: Add label</div>
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+S</span>: Save</div>
         <div class="shortcut-item"><span class="shortcut-key">←/→</span>: Navigate</div>
@@ -388,6 +393,9 @@
         const discardChanges = document.getElementById('discardChanges');
 
         // State
+        let imageAndLabelBatchBuffer = {};
+        let isBatchRequestPending = false;
+        let currentImageFilename = '';
         let currentLabels = [];
         let selectedLabelIndex = -1;
         let isDrawing = false;
@@ -400,7 +408,13 @@
         let isDiscardChangesShown = false;
 
         function setupCanvas() {
+            //console.log(`indexOfCurrent:${imageAndLabelBatchBuffer.indexOfCurrent}`);
             const image = document.getElementById('mainImage');
+            if (!image) {
+                console.warn('Image element not found, retrying...');
+                setTimeout(setupCanvas, 100);
+                return;
+            }
             const rect = image.getBoundingClientRect();
             canvas.width = image.naturalWidth;
             canvas.height = image.naturalHeight;
@@ -574,6 +588,27 @@
             prevBtn.disabled = false;
         }
 
+        function redrawImageAndLabel(index) {
+            //console.log(`index:${index}, indexOfCurrent:${imageAndLabelBatchBuffer.indexOfCurrent}`);
+            // update index 
+            imageAndLabelBatchBuffer.indexOfCurrent = index;
+            
+            const batchElem = imageAndLabelBatchBuffer.batch[index];
+            // update image
+            imageContainer.innerHTML = batchElem.imageHTML;
+            // update info
+            imageInfo.textContent = `${batchElem.info.index + 1} / ${batchElem.info.total}`;
+            // update filename
+            currentImageFilename = batchElem.info.filename;
+
+            setTimeout(() => {
+                // draw image and info
+                setupCanvas();
+            }, 50);
+            // update labels
+            processLables(batchElem.labels, imageAndLabelBatchBuffer.classes);
+        }
+
         // Event Listeners
         // Panel collapse/expand
         collapseBtn.addEventListener('click', () => {
@@ -604,17 +639,27 @@
         });
 
         prevBtn.addEventListener('click', () => {
-            vscode.postMessage({
-                command: 'prevImage',
-                sendLabels: true
-            });
+            if (imageAndLabelBatchBuffer.batch && imageAndLabelBatchBuffer.indexOfCurrent <= 0) return;
+            redrawImageAndLabel(imageAndLabelBatchBuffer.indexOfCurrent - 1);
+            if (!isBatchRequestPending) {
+                isBatchRequestPending = true;
+                vscode.postMessage({ // request to update the buffer
+                    command: 'prevImage',
+                    currentImageFilename: currentImageFilename
+                });
+            }
         });
 
         nextBtn.addEventListener('click', () => {
-            vscode.postMessage({
-                command: 'nextImage',
-                sendLabels: true
-            });
+            if (imageAndLabelBatchBuffer.batch && imageAndLabelBatchBuffer.indexOfCurrent >= imageAndLabelBatchBuffer.batch.length - 1) return;
+            redrawImageAndLabel(imageAndLabelBatchBuffer.indexOfCurrent + 1);
+            if (!isBatchRequestPending) {
+                isBatchRequestPending = true;
+                vscode.postMessage({ // request to update the buffer
+                    command: 'nextImage',
+                    currentImageFilename: currentImageFilename
+                });
+            }
         });
 
         var canvasClicked = false;
@@ -812,9 +857,21 @@
                     imageContainer.innerHTML = message.html;
                     const info = message.info;
                     imageInfo.textContent = `${info.index + 1} / ${info.total}`;
+                    currentImageFilename = info.filename;
                     setTimeout(setupCanvas, 50);
                     // Process Labels
                     processLables(message.labels, message.classes);
+                    break;
+
+                case 'updateImageAndLabelBuffer':
+                    // update the buffer
+                    imageAndLabelBatchBuffer.batch = message.batch;
+                    imageAndLabelBatchBuffer.classes = message.classes;
+                    imageAndLabelBatchBuffer.indexOfCurrent = imageAndLabelBatchBuffer.batch.findIndex((batchElem) => batchElem.info.filename === currentImageFilename);
+                    isBatchRequestPending = false;
+                    //console.log(`currentImageFilename ${currentImageFilename}`);
+                    //console.log(`imageAndLabelBatchBuffer.indexOfCurrent ${imageAndLabelBatchBuffer.indexOfCurrent}`);
+                    //console.log(imageAndLabelBatchBuffer.batch.map((elem) => {return `info:${elem.info.index}, ${elem.info.filename}`;}));
                     break;
 
                 case 'cacheStatus':
@@ -850,9 +907,12 @@
         // Initialize - just request current image, don't assume anything is ready
         document.addEventListener('DOMContentLoaded', () => {
             vscode.postMessage({
-                command: 'getCurrentImage',
-                sendLabels: true
+                command: 'getCurrentImage'
             });
+            vscode.postMessage({
+                command: 'sendCacheBuffer'
+            });
+            document.getElementById('shortcutHelp').classList.toggle('hide', "${showShortcutsHelp}" === "hide");
         });
     </script>
 </body>
