@@ -3,11 +3,18 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 interface LabelElement {
-    classId: number, cx: number, cy: number, w: number, h: number
+    classId: number;
+    cx: number;
+    cy: number;
+    w: number;
+    h: number;
 }
 
-interface ImageInfo { 
-    path: string; index: number; total: number; filename: string 
+interface ImageInfo {
+    path: string;
+    index: number;
+    total: number;
+    filename: string;
 }
 
 interface BatchElement {
@@ -32,7 +39,7 @@ export class ImagePreloader {
     private isPreloading = false;
     private keepBuffer = 5; // Number of images to keep in cache around current position
 
-    constructor(private webview: vscode.Webview) {}
+    constructor(private webview: vscode.Webview) { }
 
     // Initialize with directory and set current image
     public async initialize(directoryPath: string, currentImagePath: string, prevCount = 2, nextCount = 3, keepBuffer = 5): Promise<void> {
@@ -79,10 +86,18 @@ export class ImagePreloader {
         this.currentIndex = this.imageFiles.findIndex((imagePath) => path.basename(imagePath) === imageFilename);
     }
 
+    public getCurrentIndex(): number {
+        return this.currentIndex;
+    }
+
+    public setCurrentIndex(index: number) {
+        this.currentIndex = index;
+    }
+
     // Get HTML for current image (instant if cached)
     public getCurrentImageHTML(): string {
         const currentImage = this.imageFiles[this.currentIndex];
-        if (!currentImage) {return '<div>No image found</div>';}
+        if (!currentImage) { return '<div>No image found</div>'; }
 
         const cached = this.findCacheItem(this.currentIndex);
         if (cached) {
@@ -140,15 +155,15 @@ export class ImagePreloader {
     // Preload images around current position
     private async preloadAroundCurrent(): Promise<void> {
         //console.log(`this.isPreloading:${this.isPreloading}, currentIndex:${this.currentIndex}, filename:${this.imageFiles[this.currentIndex]}`);
-        if (this.isPreloading) {return;}
+        if (this.isPreloading) { return; }
         this.isPreloading = true;
 
         try {
             const indicesToPreload: number[] = [];
-            
+
             // Add current image index
             indicesToPreload.push(this.currentIndex);
-            
+
             // Add next image indices
             for (let i = 1; i <= this.preloadRadius.next; i++) {
                 const nextIndex = this.currentIndex + i;
@@ -156,7 +171,7 @@ export class ImagePreloader {
                     indicesToPreload.push(nextIndex);
                 }
             }
-            
+
             // Add previous image indices
             for (let i = 1; i <= this.preloadRadius.prev; i++) {
                 const prevIndex = this.currentIndex - i;
@@ -174,7 +189,7 @@ export class ImagePreloader {
 
             // Clean up old cached images to manage memory
             this.cleanupDistantImages();
-            
+
         } finally {
             this.isPreloading = false;
         }
@@ -185,13 +200,13 @@ export class ImagePreloader {
         const loadPromises = imageIndices.map(async (imageIndex) => {
             try {
                 const imagePath = this.imageFiles[imageIndex];
-                
+
                 // Load image data
                 const buffer = await fs.promises.readFile(imagePath);
                 const base64 = buffer.toString('base64');
                 const mimeType = this.getMimeType(imagePath);
                 const dataUrl = `data:${mimeType};base64,${base64}`;
-                
+
                 // Load labels data
                 const labels = await this.loadLabelsForImage(imagePath);
                 const labelsMtime = await this.getFileModTime(this.getLabelsPath(imagePath));
@@ -207,7 +222,7 @@ export class ImagePreloader {
 
                 // Insert cache item in correct position to maintain sequence
                 this.insertCacheItemInOrder(cacheItem);
-                
+
             } catch (error) {
                 console.warn(`Failed to preload image at index ${imageIndex}:`, error);
             }
@@ -219,7 +234,7 @@ export class ImagePreloader {
     // Insert cache item maintaining the sequential order
     private insertCacheItemInOrder(newItem: CacheItem): void {
         const insertIndex = this.cache.findIndex(item => item.imageIndex > newItem.imageIndex);
-        
+
         if (insertIndex === -1) {
             // Insert at the end
             this.cache.push(newItem);
@@ -233,9 +248,9 @@ export class ImagePreloader {
     private cleanupDistantImages(): void {
         const minKeepIndex = Math.max(0, this.currentIndex - (this.preloadRadius.prev + this.keepBuffer));
         const maxKeepIndex = Math.min(this.imageFiles.length - 1, this.currentIndex + (this.preloadRadius.next + this.keepBuffer));
-        
+
         // Filter cache to keep only items within the keep range
-        this.cache = this.cache.filter(item => 
+        this.cache = this.cache.filter(item =>
             item.imageIndex >= minKeepIndex && item.imageIndex <= maxKeepIndex
         );
     }
@@ -266,7 +281,7 @@ export class ImagePreloader {
     private getLabelsPath(imagePath: string): string {
         const dir = path.dirname(imagePath);
         const name = path.basename(imagePath, path.extname(imagePath));
-        
+
         const sameFolderLabels = path.join(dir, `${name}.txt`);
         if (fs.existsSync(sameFolderLabels)) {
             return sameFolderLabels;
@@ -278,7 +293,7 @@ export class ImagePreloader {
             dir_parts[lastImagesFolderIndex] = 'labels';
         }
         const labelsDir = dir_parts.join(path.sep);
-        
+
         return path.join(labelsDir, `${name}.txt`);
     }
 
@@ -299,7 +314,7 @@ export class ImagePreloader {
     private async loadLabelsForImage(imagePath: string): Promise<LabelElement[]> {
         try {
             const labelPath = this.getLabelsPath(imagePath);
-            
+
             // Check if we have cached labels that are still valid
             const cachedItem = this.findCacheItemByPath(imagePath);
             if (cachedItem) {
@@ -313,7 +328,7 @@ export class ImagePreloader {
                 console.warn(`labels.txt not found for ${imagePath}`);
                 return [];
             }
-            
+
             const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
             const labels = labelContent
                 .split('\n')
@@ -340,11 +355,11 @@ export class ImagePreloader {
     public getCurrentLabel(): Promise<LabelElement[]> {
         const currentPath = this.imageFiles[this.currentIndex];
         const cachedItem = this.findCacheItem(this.currentIndex);
-        
+
         if (cachedItem) {
             return Promise.resolve(cachedItem.labels);
         }
-        
+
         return this.loadLabelsForImage(currentPath);
     }
 
@@ -365,9 +380,9 @@ export class ImagePreloader {
     }
 
     // EXACT SAME BEHAVIOR - returns boolean
-    public async saveLabelsForImage(labels: any[]): Promise<boolean> {
+    public async saveLabelsForImage(imageFilename: string, labels: any[]): Promise<boolean> {
         try {
-            const imagePath = this.imageFiles[this.currentIndex];
+            const imagePath = this.imageFiles.find((p) => path.basename(p) === imageFilename) || '';
             const labelPath = this.getLabelsPath(imagePath);
             const content = labels
                 .map(l => `${l.classId} ${l.cx.toFixed(6)} ${l.cy.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)}`)
@@ -375,7 +390,7 @@ export class ImagePreloader {
 
             await fs.promises.mkdir(path.dirname(labelPath), { recursive: true });
             await fs.promises.writeFile(labelPath, content);
-            
+
             // Update cached labels
             const cachedItem = this.findCacheItem(this.currentIndex);
             if (cachedItem) {
@@ -388,7 +403,7 @@ export class ImagePreloader {
                 }));
                 cachedItem.labelsMtime = await this.getFileModTime(labelPath);
             }
-            
+
             return true;
         } catch (error) {
             return false;
@@ -396,21 +411,23 @@ export class ImagePreloader {
     }
 
     // EXACT SAME BEHAVIOR - maintains the same return structure and logic  
-    public async getImageAndLabelBatchAroundCurrent(): Promise<{batch:BatchElement[]}> {
-        const currentImagePath = this.imageFiles[this.currentIndex];
-        
-        const batch: BatchElement[] = [];
-        
-        for (let i = 0; i < this.cache.length; i++) {
-            const cacheItem = this.cache[i];
-            batch.push({
-                imageHTML: this.getImageHTML(cacheItem.base64Data),
-                labels: cacheItem.labels, // Synchronous array, not Promise
-                info: this.getImageInfo(cacheItem.imageIndex)
-            });
-        }
+    public async getImageAndLabelBatchAroundCurrent(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
+        const batch: Map<number, BatchElement> = new Map();
+        console.log(`getImageAndLabelBatchAroundCurrent called. this.cache.length:${this.cache.length}, currentIndex:${this.currentIndex}`);
+        this.cache.map((cacheItem) => {
+            console.log(`currentKeys.includes(cacheItem.imageIndex):${currentKeys.includes(cacheItem.imageIndex)}`);
+            if (!currentKeys.includes(cacheItem.imageIndex)) {
+                const info = this.getImageInfo(cacheItem.imageIndex);
+                console.log(`setting batch.set(${info.index})`);
+                batch.set(info.index, {
+                    imageHTML: this.getImageHTML(cacheItem.base64Data),
+                    labels: cacheItem.labels,
+                    info: info
+                });
+            }
+        });
 
-        return {batch: batch};
+        return { batch: batch };
     }
 
     public setKeepBuffer(keepBuffer: number) {

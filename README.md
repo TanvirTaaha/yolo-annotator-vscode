@@ -26,12 +26,10 @@ Visual annotation tool for creating YOLO object detection datasets in VS Code.
 
 ### Quick Start
 
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run "Start YOLO Annotation Editor"
-3. Select:
-   - Images directory (containing .jpg, .png files)
-   - Labels directory (for .txt output files)
-   - classes.txt file (one class name per line)
+1. Right Click on any image and select "Open with YOLO Annotator"
+2. Make sure to have a `classes.txt` file somewhere in the file structure shown below.
+3. If labels are found you should see labels drawn on your image.
+4. Use the navigation panel on the top-right or keyboard shortcuts to browse through images.
 
 ### Keyboard Shortcuts
 

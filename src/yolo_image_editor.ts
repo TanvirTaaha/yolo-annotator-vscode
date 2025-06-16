@@ -8,16 +8,10 @@ import { SettingsManager } from './settings_manager';
 // Custom Editor Provider for Image Annotation
 export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
     private imagePreloader?: preloader.ImagePreloader;
-    private settingsListener?: vscode.Disposable;
     private classesPath = '';
     private classes = new Array<string>();
 
-    constructor(private readonly context: vscode.ExtensionContext) {
-        // Listen for settings changes
-        this.settingsListener = SettingsManager.onConfigurationChanged((e) => {
-            this.handleSettingsChange(e);
-        });
-    }
+    constructor(private readonly context: vscode.ExtensionContext) {}
 
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -112,7 +106,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             // Replace placeholders in the HTML content
             htmlContent = htmlContent.replace(/\$\{nonce\}/g, nonce);
             // htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
-            htmlContent = htmlContent.replace(/\$\{showShortcutsHelp\}/g, showShortcutsHelp? 'show': 'hide');
+            htmlContent = htmlContent.replace(/\$\{showShortcutsHelp\}/g, showShortcutsHelp ? 'show' : 'hide');
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
 
             return htmlContent;
@@ -192,19 +186,36 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         }
     }
 
-    private async sendCacheBuffer(webview: vscode.Webview): Promise<void> {
-        //console.log(`sendCacheBuffer called`);
-        const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent();
+    private async sendCacheBuffer(webview: vscode.Webview, currentKeys: number[]): Promise<void> {
+        console.log(`sendCacheBuffer called`);
+        const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
+
+        if (buffer) {
+            console.log(`got buffer.batch.:${Array.from(buffer.batch.entries()).length}`);
+
+            for (const batchElem of buffer.batch.values()) {
+                console.log(`sending: ${batchElem.info.index}`);
+                webview.postMessage({
+                    command: 'updateImageAndLabelBuffer',
+                    batchElement: batchElem,
+                    classes: this.classes
+                });
+            }
+        }
         webview.postMessage({
-            command: 'updateImageAndLabelBuffer',
-            batch: buffer?.batch,
-            classes: this.classes
+            command: 'updateImageAndLabelBufferEnd'
         });
     }
 
     private async setupMessageHandling(webviewPanel: vscode.WebviewPanel, document: YOLOImageDocument): Promise<void> {
         webviewPanel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
+                case 'giveMeSettings':
+                    webviewPanel.webview.postMessage({
+                        command: 'takeTheseSettings',
+                        settings: SettingsManager.getAllSettings()
+                    });
+                    break;
                 case 'loadLabels':
                     const labels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
@@ -215,7 +226,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'saveLabels':
-                    const result = await this.imagePreloader?.saveLabelsForImage(message.newLabels) || false;
+                    const result = await this.imagePreloader?.saveLabelsForImage(message.imageFilename, message.newLabels) || false;
                     webviewPanel.webview.postMessage({
                         command: 'afterSave',
                         result: result
@@ -236,24 +247,26 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'prevImage':
-                    this.imagePreloader?.updateCurrentIndex(message.currentImageFilename);
+                    console.log(`got message: prevImage: filename:${message.currentImageIndex}, keys:${message.currentKeys}`);
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     const prevHTML = await this.imagePreloader?.goToPrevious(); // this updates the preload cache
-                    await this.sendCacheBuffer(webviewPanel.webview); // send the recent cache
+                    await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys); // send the recent cache
                     break;
 
                 case 'nextImage':
-                    this.imagePreloader?.updateCurrentIndex(message.currentImageFilename);
+                    console.log(`got message: nextImage: filename:${message.currentImageIndex}, keys:${message.currentKeys}`);
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     const nextHTML = await this.imagePreloader?.goToNext(); // this updates the preload cache
-                    await this.sendCacheBuffer(webviewPanel.webview); // send the recent cache
+                    await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys); // send the recent cache
                     break;
 
                 case 'gotoImage':
                     const gotoHTML = await this.imagePreloader?.goToIndex(message.index); // this updates the preload cache
-                    await this.sendCacheBuffer(webviewPanel.webview); // send the recent cache
+                    await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys); // send the recent cache
                     break;
 
                 case 'sendCacheBuffer':
-                    await this.sendCacheBuffer(webviewPanel.webview);
+                    await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys);
                     break;
 
                 case 'getCacheStatus':
@@ -286,34 +299,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
         return text;
-    }
-
-    dispose(): void {
-        this.settingsListener?.dispose();
-    }
-
-    private handleSettingsChange(e: vscode.ConfigurationChangeEvent): void {
-        // Check if preload settings changed
-        if (SettingsManager.hasSettingChanged(e, 'preload.nextImages') ||
-            SettingsManager.hasSettingChanged(e, 'preload.previousImages') ||
-            SettingsManager.hasSettingChanged(e, 'preload.keepBuffer')) {
-            
-            this.updatePreloaderSettings();
-        }
-    }
-    
-    private updatePreloaderSettings(): void {
-        if (!this.imagePreloader) {return;}
-
-        const settings = {
-            previous: SettingsManager.getPreviousImagesToPreload(),
-            next: SettingsManager.getNextImagesToPreload(),
-            keepBuffer: SettingsManager.getKeepBufferSize()
-        };
-
-        // Update preloader settings
-        this.imagePreloader.updatePreloadRadius(settings.previous, settings.next);
-        this.imagePreloader.setKeepBuffer(settings.keepBuffer);
     }
 }
 

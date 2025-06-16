@@ -316,11 +316,16 @@
         </div>
 
         <div class="panel-content" id="panelContent">
+            <!-- Image Name -->
+            <div class="control-section">
+                <div class="image-info" id="imageNameField">Loading...</div>
+            </div>
+
             <!-- Navigation -->
             <div class="control-section">
                 <div class="nav-controls">
                     <button id="prevBtn" title="Previous Image (←)">‹</button>
-                    <div class="image-info" id="imageInfo">Loading...</div>
+                    <div class="image-info" id="imageInfoField">Loading...</div>
                     <button id="nextBtn" title="Next Image (→)">›</button>
                 </div>
             </div>
@@ -367,6 +372,7 @@
         <div class="shortcut-item"><span class="shortcut-key">←/→</span>: Navigate</div>
         <div class="shortcut-item"><span class="shortcut-key">Del</span>: Delete selected</div>
         <div class="shortcut-item"><span class="shortcut-key">Esc</span>: Cancel drawing</div>
+        <div class="shortcut-item"><span class="shortcut-key">Drag handles</span>: Resize box</div>
     </div>
 
     <script nonce="${nonce}">
@@ -384,7 +390,8 @@
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
-        const imageInfo = document.getElementById('imageInfo');
+        const imageInfoField = document.getElementById('imageInfoField');
+        const imageNameField = document.getElementById('imageNameField');
         const addLabelBtn = document.getElementById('addLabelBtn');
         const saveBtn = document.getElementById('saveBtn');
         const autoSuggestBtn = document.getElementById('autoSuggestBtn');
@@ -395,7 +402,7 @@
         // State
         let imageAndLabelBatchBuffer = {};
         let isBatchRequestPending = false;
-        let currentImageFilename = '';
+        let currentImageInfo = {};
         let currentLabels = [];
         let selectedLabelIndex = -1;
         let isDrawing = false;
@@ -406,9 +413,41 @@
         let popupTargetIndex = -1; // Index of label to be edited
         let popupIsShowing = false;
         let isDiscardChangesShown = false;
+        let isInMoveBoxMode = false;
+        let pendingReqImageIndex = false;
+        let settings = null;
+
+        // Resize handle state
+        let isResizing = false;
+        let resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
+        let resizeStartPos = null;
+        let originalLabel = null;
+
+        // Box move state
+        let moveStartPos = null;
+        let moveStartLabelCenter = null;
+
+        function initializeDrawingStateVariables() {
+            isDrawing = false;
+            drawingMode = false;
+            startPos = null;
+            currentPos = null;
+            popupTargetIndex = -1; // Index of label to be edited
+            isInMoveBoxMode = false;
+
+
+            // Resize handle state
+            isResizing = false;
+            resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
+            resizeStartPos = null;
+            originalLabel = null;
+
+            // Box move state
+            moveStartPos = null;
+            moveStartLabelCenter = null;
+        }
 
         function setupCanvas() {
-            //console.log(`indexOfCurrent:${imageAndLabelBatchBuffer.indexOfCurrent}`);
             const image = document.getElementById('mainImage');
             if (!image) {
                 console.warn('Image element not found, retrying...');
@@ -445,6 +484,11 @@
                 drawBoundingBox(label, isSelected, index);
             });
 
+            // Draw resize handles for selected label
+            if (selectedLabelIndex !== -1 && !drawingMode) {
+                drawResizeHandles(currentLabels[selectedLabelIndex]);
+            }
+
             // Draw current drawing
             if (isDrawing && drawingMode && startPos && currentPos) {
                 drawCurrentBox();
@@ -475,6 +519,146 @@
             // Label text
             ctx.fillStyle = '#ffffff';
             ctx.fillText(labelText, x + 4, y - 6);
+        }
+
+        function getHandles(x, y, width, height, handleSize) {
+            return [
+                { id: 'nw', x: x - handleSize / 2, y: y - handleSize / 2 },
+                { id: 'n', x: x + width / 2 - handleSize / 2, y: y - handleSize / 2 },
+                { id: 'ne', x: x + width - handleSize / 2, y: y - handleSize / 2 },
+                { id: 'e', x: x + width - handleSize / 2, y: y + height / 2 - handleSize / 2 },
+                { id: 'se', x: x + width - handleSize / 2, y: y + height - handleSize / 2 },
+                { id: 's', x: x + width / 2 - handleSize / 2, y: y + height - handleSize / 2 },
+                { id: 'sw', x: x - handleSize / 2, y: y + height - handleSize / 2 },
+                { id: 'w', x: x - handleSize / 2, y: y + height / 2 - handleSize / 2 }
+            ]
+        }
+
+        function drawResizeHandles(label) {
+            const x = (label.cx - label.w / 2) * canvas.width;
+            const y = (label.cy - label.h / 2) * canvas.height;
+            const width = label.w * canvas.width;
+            const height = label.h * canvas.height;
+
+            const handleSize = 8;
+            const handles = getHandles(x, y, width, height, handleSize);
+
+            handles.forEach(handle => {
+                // Draw handle background
+                ctx.fillStyle = '#ff4444';
+                ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
+
+                // Draw handle border
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(handle.x, handle.y, handleSize, handleSize);
+            });
+        }
+
+        function getResizeHandle(mouseX, mouseY) {
+            if (selectedLabelIndex === -1) return null;
+
+            const label = currentLabels[selectedLabelIndex];
+            const x = (label.cx - label.w / 2) * canvas.width;
+            const y = (label.cy - label.h / 2) * canvas.height;
+            const width = label.w * canvas.width;
+            const height = label.h * canvas.height;
+
+            const handleSize = 8;
+            const tolerance = 4; // Extra pixels for easier clicking
+
+            const handles = getHandles(x, y, width, height, handleSize);
+
+            for (const handle of handles) {
+                if (mouseX >= handle.x - tolerance &&
+                    mouseX <= handle.x + handleSize + tolerance &&
+                    mouseY >= handle.y - tolerance &&
+                    mouseY <= handle.y + handleSize + tolerance) {
+                    return handle.id;
+                }
+            }
+
+            return null;
+        }
+
+        function getCursorForHandle(handleId) {
+            const cursors = {
+                'nw': 'nw-resize',
+                'n': 'n-resize',
+                'ne': 'ne-resize',
+                'e': 'e-resize',
+                'se': 'se-resize',
+                's': 's-resize',
+                'sw': 'sw-resize',
+                'w': 'w-resize'
+            };
+            return cursors[handleId] || 'default';
+        }
+
+        function resizeLabel(label, handleId, deltaX, deltaY) {
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+
+            // Convert current label to pixel coordinates
+            let x1 = (label.cx - label.w / 2) * canvasWidth;
+            let y1 = (label.cy - label.h / 2) * canvasHeight;
+            let x2 = (label.cx + label.w / 2) * canvasWidth;
+            let y2 = (label.cy + label.h / 2) * canvasHeight;
+
+            // Apply resize based on handle
+            switch (handleId) {
+                case 'nw':
+                    x1 += deltaX;
+                    y1 += deltaY;
+                    break;
+                case 'n':
+                    y1 += deltaY;
+                    break;
+                case 'ne':
+                    x2 += deltaX;
+                    y1 += deltaY;
+                    break;
+                case 'e':
+                    x2 += deltaX;
+                    break;
+                case 'se':
+                    x2 += deltaX;
+                    y2 += deltaY;
+                    break;
+                case 's':
+                    y2 += deltaY;
+                    break;
+                case 'sw':
+                    x1 += deltaX;
+                    y2 += deltaY;
+                    break;
+                case 'w':
+                    x1 += deltaX;
+                    break;
+            }
+
+            // Ensure minimum size
+            const minSize = 10;
+            if (Math.abs(x2 - x1) < minSize || Math.abs(y2 - y1) < minSize) {
+                return label; // Return unchanged if too small
+            }
+
+            // Ensure coordinates are within bounds
+            x1 = Math.max(0, Math.min(canvasWidth, x1));
+            y1 = Math.max(0, Math.min(canvasHeight, y1));
+            x2 = Math.max(0, Math.min(canvasWidth, x2));
+            y2 = Math.max(0, Math.min(canvasHeight, y2));
+
+            // Convert back to normalized coordinates
+            const newLabel = {
+                ...label,
+                cx: (x1 + x2) / 2 / canvasWidth,
+                cy: (y1 + y2) / 2 / canvasHeight,
+                w: Math.abs(x2 - x1) / canvasWidth,
+                h: Math.abs(y2 - y1) / canvasHeight
+            };
+
+            return newLabel;
         }
 
         function drawCurrentBox() {
@@ -589,24 +773,45 @@
         }
 
         function redrawImageAndLabel(index) {
-            //console.log(`index:${index}, indexOfCurrent:${imageAndLabelBatchBuffer.indexOfCurrent}`);
-            // update index 
-            imageAndLabelBatchBuffer.indexOfCurrent = index;
-            
-            const batchElem = imageAndLabelBatchBuffer.batch[index];
+            const batchElem = imageAndLabelBatchBuffer.batch.get(index);
+            if (!batchElem) {
+                console.warn(`No element found for index:${index}`);
+                return;
+            }
             // update image
             imageContainer.innerHTML = batchElem.imageHTML;
             // update info
-            imageInfo.textContent = `${batchElem.info.index + 1} / ${batchElem.info.total}`;
-            // update filename
-            currentImageFilename = batchElem.info.filename;
+            imageInfoField.textContent = `${batchElem.info.index + 1} / ${batchElem.info.total}`;
 
+            imageNameField.textContent = `${batchElem.info.filename}`;
+            // update info
+            currentImageInfo = batchElem.info;
+            initializeDrawingStateVariables();
             setTimeout(() => {
                 // draw image and info
                 setupCanvas();
             }, 50);
             // update labels
             processLables(batchElem.labels, imageAndLabelBatchBuffer.classes);
+        }
+
+        function clearAroundCurrentImage() {
+            vscode.postMessage({
+                command: 'giveMeSettins'
+            });
+            if (settings) {
+                var keepBuffer = settings.preload.keepBuffer;
+                var previousImages = settings.preload.previousImages;
+                var nextImages = settings.preload.nextImages;
+                const minKeepIndex = Math.max(0, currentImageInfo.index - (previousImages + keepBuffer));
+                const maxKeepIndex = Math.min(currentImageInfo.total - 1, currentImageInfo.index + (nextImages + keepBuffer));
+
+                // Filter cache to keep only items within the keep range
+                imageAndLabelBatchBuffer.batch = new Map(
+                    [...imageAndLabelBatchBuffer.batch]
+                        .filter(([index, batchElem]) => index >= minKeepIndex && index <= maxKeepIndex)
+                );
+            }
         }
 
         // Event Listeners
@@ -627,6 +832,7 @@
         saveBtn.addEventListener('click', () => {
             vscode.postMessage({
                 command: 'saveLabels',
+                imageFilename: currentImageInfo.filename,
                 newLabels: currentLabels
             });
         });
@@ -635,56 +841,82 @@
             vscode.postMessage({
                 command: 'showDiscardChangesChoice'
             });
-
         });
 
         prevBtn.addEventListener('click', () => {
-            if (imageAndLabelBatchBuffer.batch && imageAndLabelBatchBuffer.indexOfCurrent <= 0) return;
-            redrawImageAndLabel(imageAndLabelBatchBuffer.indexOfCurrent - 1);
+
+            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
+
+                return;
+            }
+            redrawImageAndLabel(currentImageInfo.index - 1);
             if (!isBatchRequestPending) {
                 isBatchRequestPending = true;
                 vscode.postMessage({ // request to update the buffer
                     command: 'prevImage',
-                    currentImageFilename: currentImageFilename
+                    currentImageIndex: currentImageInfo.index,
+                    currentKeys: Array.from(imageAndLabelBatchBuffer.batch.keys())
                 });
+            } else {
+                pendingReqImageIndex = true;
             }
         });
 
         nextBtn.addEventListener('click', () => {
-            if (imageAndLabelBatchBuffer.batch && imageAndLabelBatchBuffer.indexOfCurrent >= imageAndLabelBatchBuffer.batch.length - 1) return;
-            redrawImageAndLabel(imageAndLabelBatchBuffer.indexOfCurrent + 1);
+
+            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
+
+                return;
+            }
+            redrawImageAndLabel(currentImageInfo.index + 1);
             if (!isBatchRequestPending) {
                 isBatchRequestPending = true;
                 vscode.postMessage({ // request to update the buffer
                     command: 'nextImage',
-                    currentImageFilename: currentImageFilename
+                    currentImageIndex: currentImageInfo.index,
+                    currentKeys: Array.from(imageAndLabelBatchBuffer.batch.keys())
                 });
+            } else {
+                pendingReqImageIndex = true;
             }
         });
 
         var canvasClicked = false;
         // Canvas interaction
         canvas.addEventListener('mousedown', (e) => {
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
             if (drawingMode) {
-                const rect = canvas.getBoundingClientRect();
-                startPos = {
-                    x: (e.clientX - rect.left) * (canvas.width / rect.width),
-                    y: (e.clientY - rect.top) * (canvas.height / rect.height)
-                };
+                startPos = { x: mouseX, y: mouseY };
                 isDrawing = true;
             } else {
-                // Select existing label
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-                const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+                // Check for resize handle first
+                const handle = getResizeHandle(mouseX, mouseY);
+                if (handle && selectedLabelIndex !== -1) {
+                    isResizing = true;
+                    resizeHandle = handle;
+                    resizeStartPos = { x: mouseX, y: mouseY };
+                    originalLabel = { ...currentLabels[selectedLabelIndex] };
+                    canvas.style.cursor = getCursorForHandle(handle);
+                    return;
+                }
 
-                const clickedIndex = findLabelAtPosition(x, y);
+                // Select existing label
+                const clickedIndex = findLabelAtPosition(mouseX, mouseY);
                 switch (clickedIndex) {
                     case -1:
                         unSelectLabel();
                         break;
                     case selectedLabelIndex:
-                        if (!canvasClicked) unSelectLabel();
+                        isInMoveBoxMode = true;
+                        moveStartPos = { x: mouseX, y: mouseY };
+                        moveStartLabelCenter = {
+                            cx: currentLabels[selectedLabelIndex].cx,
+                            cy: currentLabels[selectedLabelIndex].cy
+                        };
                         break;
                     default:
                         selectLabel(clickedIndex);
@@ -693,8 +925,7 @@
                 if (!canvasClicked) {
                     // Register first click
                     canvasClicked = true;
-                }
-                else {// Double click
+                } else {// Double click
                     selectLabel(clickedIndex);
                     showPopup(clickedIndex);
                 }
@@ -703,18 +934,72 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            if (isDrawing && drawingMode) {
-                const rect = canvas.getBoundingClientRect();
-                currentPos = {
-                    x: (e.clientX - rect.left) * (canvas.width / rect.width),
-                    y: (e.clientY - rect.top) * (canvas.height / rect.height)
-                };
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            if (isResizing && selectedLabelIndex !== -1) {
+                const deltaX = mouseX - resizeStartPos.x;
+                const deltaY = mouseY - resizeStartPos.y;
+
+                currentLabels[selectedLabelIndex] = resizeLabel(originalLabel, resizeHandle, deltaX, deltaY);
+                updateLabelsList();
                 redrawAnnotations();
+                showDiscardChangesText();
+            } else if (isDrawing && drawingMode) {
+                currentPos = { x: mouseX, y: mouseY };
+                redrawAnnotations();
+            } else if (isInMoveBoxMode) {
+                const deltaX = (mouseX - moveStartPos.x) / canvas.width;
+                const deltaY = (mouseY - moveStartPos.y) / canvas.height;
+
+                const newCX = moveStartLabelCenter.cx + deltaX;
+                const newCY = moveStartLabelCenter.cy + deltaY;
+                var changed = false;
+                if (
+                    newCX >= currentLabels[selectedLabelIndex].w / 2 &&      // left limit
+                    newCX <= 1 - currentLabels[selectedLabelIndex].w / 2     // right limit
+                ) {
+                    currentLabels[selectedLabelIndex].cx = newCX;
+                    changed = true;
+                }
+                if (
+                    newCY >= currentLabels[selectedLabelIndex].h / 2 &&      // top limit
+                    newCY <= 1 - currentLabels[selectedLabelIndex].h / 2     // bottom limit
+                ) {
+                    currentLabels[selectedLabelIndex].cy = newCY;
+                    changed = true;
+                }
+                if (changed) {
+                    updateLabelsList();
+                    redrawAnnotations();
+                    showDiscardChangesText();
+                }
+            } else if (!drawingMode) {
+                // Update cursor based on what's under the mouse
+                const handle = getResizeHandle(mouseX, mouseY);
+                if (handle && selectedLabelIndex !== -1) {
+                    canvas.style.cursor = getCursorForHandle(handle);
+                } else {
+                    canvas.style.cursor = 'default';
+                }
             }
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            if (isDrawing && drawingMode && startPos && currentPos) {
+
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle = null;
+                resizeStartPos = null;
+                originalLabel = null;
+                canvas.style.cursor = 'default';
+                showStatus('Label resized', false);
+            } else if (isInMoveBoxMode) {
+                isInMoveBoxMode = false;
+                moveStartPos = null;
+                moveStartLabelCenter = null;
+            } else if (isDrawing && drawingMode && startPos && currentPos) {
                 const x = Math.min(startPos.x, currentPos.x);
                 const y = Math.min(startPos.y, currentPos.y);
                 const width = Math.abs(currentPos.x - startPos.x);
@@ -803,6 +1088,7 @@
                     if (selectedLabelIndex !== -1) {
                         e.preventDefault();
                         deleteLabel(selectedLabelIndex);
+                        unSelectLabel();
                     }
                     break;
                 case 'Escape':
@@ -824,6 +1110,9 @@
         window.addEventListener('message', (e) => {
             const message = e.data;
             switch (message.command) {
+                case 'takeTheseSettings':
+                    settings = message.settings
+                    break;
                 case 'labelsLoaded':
                     processLables(message.labels, message.classes);
                     break;
@@ -856,8 +1145,11 @@
                     // Process Image
                     imageContainer.innerHTML = message.html;
                     const info = message.info;
-                    imageInfo.textContent = `${info.index + 1} / ${info.total}`;
-                    currentImageFilename = info.filename;
+                    imageInfoField.textContent = `${info.index + 1} / ${info.total}`;
+                    imageNameField.textContent = `${info.filename}`;
+                    currentImageInfo = info;
+
+                    initializeDrawingStateVariables();
                     setTimeout(setupCanvas, 50);
                     // Process Labels
                     processLables(message.labels, message.classes);
@@ -865,23 +1157,37 @@
 
                 case 'updateImageAndLabelBuffer':
                     // update the buffer
-                    imageAndLabelBatchBuffer.batch = message.batch;
+                    if (!imageAndLabelBatchBuffer.batch) {
+                        imageAndLabelBatchBuffer.batch = new Map();
+                    }
+                    imageAndLabelBatchBuffer.batch.set(message.batchElement.info.index, message.batchElement);
                     imageAndLabelBatchBuffer.classes = message.classes;
-                    imageAndLabelBatchBuffer.indexOfCurrent = imageAndLabelBatchBuffer.batch.findIndex((batchElem) => batchElem.info.filename === currentImageFilename);
+                    break;
+
+                case 'updateImageAndLabelBufferEnd':
                     isBatchRequestPending = false;
-                    //console.log(`currentImageFilename ${currentImageFilename}`);
-                    //console.log(`imageAndLabelBatchBuffer.indexOfCurrent ${imageAndLabelBatchBuffer.indexOfCurrent}`);
-                    //console.log(imageAndLabelBatchBuffer.batch.map((elem) => {return `info:${elem.info.index}, ${elem.info.filename}`;}));
+                    if (pendingReqImageIndex) {
+                        pendingReqImageIndex = false;
+                        isBatchRequestPending = true;
+                        vscode.postMessage({ // request to update the buffer
+                            command: 'prevImage',
+                            currentImageIndex: currentImageInfo.index,
+                            currentKeys: Array.from(imageAndLabelBatchBuffer.batch.keys())
+                        });
+                    } else {
+                        clearAroundCurrentImage();
+                    }
                     break;
 
                 case 'cacheStatus':
-                    imageInfo.textContent = `Cached: ${message.status.cached}`;
+                    imageInfoField.textContent = `Cached: ${message.status.cached}`;
                     break;
 
                 case 'afterSave':
                     if (message.result) {
                         hideDiscardChangesText();
                         showStatus("Saving success.", false);
+                        initializeDrawingStateVariables();
                     } else {
                         showStatus("Error saving.", true);
                     }
@@ -907,10 +1213,15 @@
         // Initialize - just request current image, don't assume anything is ready
         document.addEventListener('DOMContentLoaded', () => {
             vscode.postMessage({
-                command: 'getCurrentImage'
+                command: 'giveMeSettings'
             });
             vscode.postMessage({
-                command: 'sendCacheBuffer'
+                command: 'getCurrentImage'
+            });
+            imageAndLabelBatchBuffer.batch = new Map(); // Initialize the map
+            vscode.postMessage({
+                command: 'sendCacheBuffer',
+                currentKeys: []
             });
             document.getElementById('shortcutHelp').classList.toggle('hide', "${showShortcutsHelp}" === "hide");
         });
