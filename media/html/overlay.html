@@ -980,6 +980,8 @@
                 const handle = getResizeHandle(mouseX, mouseY);
                 if (handle && selectedLabelIndex !== -1) {
                     canvas.style.cursor = getCursorForHandle(handle);
+                } else if (findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
+                    canvas.style.cursor = 'grab';
                 } else {
                     canvas.style.cursor = 'default';
                 }
