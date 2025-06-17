@@ -564,7 +564,7 @@
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
 
-            const handleSize = 8;
+            const handleSize = 16;
             const tolerance = 4; // Extra pixels for easier clicking
 
             const handles = getHandles(x, y, width, height, handleSize);
@@ -994,7 +994,6 @@
                 resizeStartPos = null;
                 originalLabel = null;
                 canvas.style.cursor = 'default';
-                showStatus('Label resized', false);
             } else if (isInMoveBoxMode) {
                 isInMoveBoxMode = false;
                 moveStartPos = null;
