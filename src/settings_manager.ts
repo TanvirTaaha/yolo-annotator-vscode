@@ -47,7 +47,7 @@ export class SettingsManager {
     }
 
     static getResizeMarkerSize(): number {
-        return this.getConfig('ui.resizeMarkerSize', 16);
+        return this.getConfig('ui.resizeMarkerSize', 8);
     }
 
     /**

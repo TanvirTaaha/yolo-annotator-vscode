@@ -80,7 +80,9 @@
         },
         "yoloAnnotator.ui.resizeMarkerSize": {
           "type": "number",
-          "default": true,
+          "default": 16,
+          "minimum": 4,
+          "maximum": 64,
           "description": "Size of the mouse anchor marker while resizing bounding box in pixels",
           "scope": "resource"
         }
