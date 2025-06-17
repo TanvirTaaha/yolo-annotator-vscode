@@ -77,6 +77,12 @@
           "default": true,
           "description": "Show keyboard shortcuts help panel",
           "scope": "resource"
+        },
+        "yoloAnnotator.ui.resizeMarkerSize": {
+          "type": "number",
+          "default": true,
+          "description": "Size of the mouse anchor marker while resizing bounding box in pixels",
+          "scope": "resource"
         }
       }
     },

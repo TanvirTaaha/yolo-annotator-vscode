@@ -96,7 +96,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         const nonce = this.getNonce();
         const imageWebviewUri = webview.asWebviewUri(imageUri);
         const showShortcutsHelp = SettingsManager.getShowShortcutsHelp();
-
+        const handleSize = SettingsManager.getResizeMarkerSize();
 
         try {
             // Path to your HTML file
@@ -107,6 +107,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             htmlContent = htmlContent.replace(/\$\{nonce\}/g, nonce);
             // htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
             htmlContent = htmlContent.replace(/\$\{showShortcutsHelp\}/g, showShortcutsHelp ? 'show' : 'hide');
+            htmlContent = htmlContent.replace(/\$\{handleSize\}/g, `${handleSize}`);
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
 
             return htmlContent;

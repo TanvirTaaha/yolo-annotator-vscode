@@ -46,6 +46,10 @@ export class SettingsManager {
         return this.getConfig('ui.showShortcutsHelp', true);
     }
 
+    static getResizeMarkerSize(): number {
+        return this.getConfig('ui.resizeMarkerSize', 16);
+    }
+
     /**
      * Get all settings as an object
      */
@@ -57,7 +61,8 @@ export class SettingsManager {
                 keepBuffer: this.getKeepBufferSize()
             },
             ui: {
-                showShortcutsHelp: this.getShowShortcutsHelp()
+                showShortcutsHelp: this.getShowShortcutsHelp(),
+                resizeMarkerSize: this.getResizeMarkerSize()
             }
         };
     }

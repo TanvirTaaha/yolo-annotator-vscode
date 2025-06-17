@@ -422,6 +422,7 @@
         let resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
         let resizeStartPos = null;
         let originalLabel = null;
+        let handleSize = Number("${handleSize}");
 
         // Box move state
         let moveStartPos = null;
@@ -441,6 +442,7 @@
             resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
             resizeStartPos = null;
             originalLabel = null;
+            handleSize = settings.ui.handleSize;
 
             // Box move state
             moveStartPos = null;
@@ -521,7 +523,7 @@
             ctx.fillText(labelText, x + 4, y - 6);
         }
 
-        function getHandles(x, y, width, height, handleSize) {
+        function getHandles(x, y, width, height) {
             return [
                 { id: 'nw', x: x - handleSize / 2, y: y - handleSize / 2 },
                 { id: 'n', x: x + width / 2 - handleSize / 2, y: y - handleSize / 2 },
@@ -540,7 +542,6 @@
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
 
-            const handleSize = 8;
             const handles = getHandles(x, y, width, height, handleSize);
 
             handles.forEach(handle => {
@@ -564,10 +565,9 @@
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
 
-            const handleSize = 16;
             const tolerance = 4; // Extra pixels for easier clicking
 
-            const handles = getHandles(x, y, width, height, handleSize);
+            const handles = getHandles(x, y, width, height);
 
             for (const handle of handles) {
                 if (mouseX >= handle.x - tolerance &&
