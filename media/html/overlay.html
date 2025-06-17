@@ -300,13 +300,13 @@
 
 <body>
     <div class="image-container">
-        <div id="imageContainer">
+                <div id="imageContainer">
             <!-- Don't hardcode the image here, let the preloader handle it -->
             <!-- <img id="mainImage" src="${imageWebviewUri}" alt="Annotation Image"> -->
-            <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
-        </div>
-        <canvas id="annotationCanvas"></canvas>
-    </div>
+                    <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
+                </div>
+                <canvas id="annotationCanvas"></canvas>
+            </div>
 
     <!-- Floating Control Panel -->
     <div class="control-panel" id="controlPanel">
@@ -436,17 +436,18 @@
             popupTargetIndex = -1; // Index of label to be edited
             isInMoveBoxMode = false;
 
-
             // Resize handle state
             isResizing = false;
             resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
             resizeStartPos = null;
             originalLabel = null;
-            handleSize = settings.ui.resizeMarkerSize;
+            handleSize = settings ? settings.ui.resizeMarkerSize : 16;
 
             // Box move state
             moveStartPos = null;
             moveStartLabelCenter = null;
+            // Unselect label
+            selectedLabelIndex = -1;
         }
 
         function setupCanvas() {
@@ -844,9 +845,7 @@
         });
 
         prevBtn.addEventListener('click', () => {
-
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
-
                 return;
             }
             redrawImageAndLabel(currentImageInfo.index - 1);
@@ -863,9 +862,7 @@
         });
 
         nextBtn.addEventListener('click', () => {
-
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
-
                 return;
             }
             redrawImageAndLabel(currentImageInfo.index + 1);
@@ -883,8 +880,7 @@
 
         var canvasClicked = false;
         // Canvas interaction
-        canvas.addEventListener('mousedown', (e) => {
-
+        canvas.addEventListener('mousedown', (e) => {          
             const rect = canvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -976,7 +972,6 @@
                     showDiscardChangesText();
                 }
             } else if (!drawingMode) {
-                console.log(`handleSize:${handleSize}`);
                 // Update cursor based on what's under the mouse
                 const handle = getResizeHandle(mouseX, mouseY);
                 if (handle && selectedLabelIndex !== -1) {
@@ -990,7 +985,6 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
-
             if (isResizing) {
                 isResizing = false;
                 resizeHandle = null;

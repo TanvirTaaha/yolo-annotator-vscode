@@ -154,8 +154,7 @@ export class ImagePreloader {
 
     // Preload images around current position
     private async preloadAroundCurrent(): Promise<void> {
-        //console.log(`this.isPreloading:${this.isPreloading}, currentIndex:${this.currentIndex}, filename:${this.imageFiles[this.currentIndex]}`);
-        if (this.isPreloading) { return; }
+                if (this.isPreloading) { return; }
         this.isPreloading = true;
 
         try {
@@ -182,8 +181,7 @@ export class ImagePreloader {
 
             // Filter out already cached indices
             const uncachedIndices = indicesToPreload.filter(index => !this.findCacheItem(index));
-            //console.log(`uncachedIndices:${uncachedIndices}`);
-            if (uncachedIndices.length > 0) {
+                        if (uncachedIndices.length > 0) {
                 await this.preloadImages(uncachedIndices);
             }
 
@@ -413,13 +411,10 @@ export class ImagePreloader {
     // EXACT SAME BEHAVIOR - maintains the same return structure and logic  
     public async getImageAndLabelBatchAroundCurrent(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
         const batch: Map<number, BatchElement> = new Map();
-        console.log(`getImageAndLabelBatchAroundCurrent called. this.cache.length:${this.cache.length}, currentIndex:${this.currentIndex}`);
-        this.cache.map((cacheItem) => {
-            console.log(`currentKeys.includes(cacheItem.imageIndex):${currentKeys.includes(cacheItem.imageIndex)}`);
-            if (!currentKeys.includes(cacheItem.imageIndex)) {
+                this.cache.map((cacheItem) => {
+                        if (!currentKeys.includes(cacheItem.imageIndex)) {
                 const info = this.getImageInfo(cacheItem.imageIndex);
-                console.log(`setting batch.set(${info.index})`);
-                batch.set(info.index, {
+                                batch.set(info.index, {
                     imageHTML: this.getImageHTML(cacheItem.base64Data),
                     labels: cacheItem.labels,
                     info: info
