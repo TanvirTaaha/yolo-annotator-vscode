@@ -154,7 +154,7 @@ export class ImagePreloader {
 
     // Preload images around current position
     private async preloadAroundCurrent(): Promise<void> {
-                if (this.isPreloading) { return; }
+        if (this.isPreloading) { return; }
         this.isPreloading = true;
 
         try {
@@ -181,7 +181,7 @@ export class ImagePreloader {
 
             // Filter out already cached indices
             const uncachedIndices = indicesToPreload.filter(index => !this.findCacheItem(index));
-                        if (uncachedIndices.length > 0) {
+            if (uncachedIndices.length > 0) {
                 await this.preloadImages(uncachedIndices);
             }
 
@@ -411,10 +411,10 @@ export class ImagePreloader {
     // EXACT SAME BEHAVIOR - maintains the same return structure and logic  
     public async getImageAndLabelBatchAroundCurrent(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
         const batch: Map<number, BatchElement> = new Map();
-                this.cache.map((cacheItem) => {
-                        if (!currentKeys.includes(cacheItem.imageIndex)) {
+        this.cache.map((cacheItem) => {
+            if (!currentKeys.includes(cacheItem.imageIndex)) {
                 const info = this.getImageInfo(cacheItem.imageIndex);
-                                batch.set(info.index, {
+                batch.set(info.index, {
                     imageHTML: this.getImageHTML(cacheItem.base64Data),
                     labels: cacheItem.labels,
                     info: info

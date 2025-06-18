@@ -11,7 +11,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private classesPath = '';
     private classes = new Array<string>();
 
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(private readonly context: vscode.ExtensionContext) { }
 
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -188,12 +188,12 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     }
 
     private async sendCacheBuffer(webview: vscode.Webview, currentKeys: number[]): Promise<void> {
-                const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
+        const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
 
         if (buffer) {
-            
+
             for (const batchElem of buffer.batch.values()) {
-                                webview.postMessage({
+                webview.postMessage({
                     command: 'updateImageAndLabelBuffer',
                     batchElement: batchElem,
                     classes: this.classes
@@ -245,13 +245,13 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'prevImage':
-                                        this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     const prevHTML = await this.imagePreloader?.goToPrevious(); // this updates the preload cache
                     await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys); // send the recent cache
                     break;
 
                 case 'nextImage':
-                                        this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     const nextHTML = await this.imagePreloader?.goToNext(); // this updates the preload cache
                     await this.sendCacheBuffer(webviewPanel.webview, message.currentKeys); // send the recent cache
                     break;
