@@ -233,12 +233,12 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'getCurrentImage':
-                    const currentHTML = this.imagePreloader?.getCurrentImageHTML();
+                    const currentSrc = this.imagePreloader?.getCurrentImageSource();
                     const currentInfo = this.imagePreloader?.getCurrentImageInfo();
                     const currentLabels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
-                        html: currentHTML,
+                        src: currentSrc,
                         info: currentInfo,
                         labels: currentLabels,
                         classes: this.classes

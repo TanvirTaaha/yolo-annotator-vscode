@@ -18,7 +18,7 @@ interface ImageInfo {
 }
 
 interface BatchElement {
-    imageHTML: string;
+    imageSource: string | vscode.Uri | null;
     labels: LabelElement[];
     info: ImageInfo;
 }
@@ -68,10 +68,6 @@ export class ImagePreloader {
         return this.imageFiles[this.currentIndex];
     }
 
-    private getImageHTML(src: string | vscode.Uri) {
-        return `<img src="${src}" alt="Current Image" class="main-image" id="mainImage" />`;
-    }
-
     // Find cache item by image index
     private findCacheItem(imageIndex: number): CacheItem | undefined {
         return this.cache.find(item => item.imageIndex === imageIndex);
@@ -95,46 +91,46 @@ export class ImagePreloader {
     }
 
     // Get HTML for current image (instant if cached)
-    public getCurrentImageHTML(): string {
+    public getCurrentImageSource(): string | vscode.Uri | null {
         const currentImage = this.imageFiles[this.currentIndex];
-        if (!currentImage) { return '<div>No image found</div>'; }
+        if (!currentImage) { return null; }
 
         const cached = this.findCacheItem(this.currentIndex);
         if (cached) {
-            return this.getImageHTML(cached.base64Data);
+            return cached.base64Data;
         }
 
         // Fallback to webview URI if not cached yet
         const imageUri = vscode.Uri.file(currentImage);
         const webviewUri = this.webview.asWebviewUri(imageUri);
-        return this.getImageHTML(webviewUri);
+        return webviewUri;
     }
 
     // Navigate to next image
-    public async goToNext(): Promise<string> {
+    public async goToNext(): Promise<string | vscode.Uri | null> {
         if (this.currentIndex < this.imageFiles.length - 1) {
             this.currentIndex++;
             await this.preloadAroundCurrent();
         }
-        return this.getCurrentImageHTML();
+        return this.getCurrentImageSource();
     }
 
     // Navigate to previous image
-    public async goToPrevious(): Promise<string> {
+    public async goToPrevious(): Promise<string | vscode.Uri | null> {
         if (this.currentIndex > 0) {
             this.currentIndex--;
             await this.preloadAroundCurrent();
         }
-        return this.getCurrentImageHTML();
+        return this.getCurrentImageSource();
     }
 
     // Jump to specific index
-    public async goToIndex(index: number): Promise<string> {
+    public async goToIndex(index: number): Promise<string | vscode.Uri | null> {
         if (index >= 0 && index < this.imageFiles.length) {
             this.currentIndex = index;
             await this.preloadAroundCurrent();
         }
-        return this.getCurrentImageHTML();
+        return this.getCurrentImageSource();
     }
 
     // Get current image info
@@ -415,7 +411,7 @@ export class ImagePreloader {
             if (!currentKeys.includes(cacheItem.imageIndex)) {
                 const info = this.getImageInfo(cacheItem.imageIndex);
                 batch.set(info.index, {
-                    imageHTML: this.getImageHTML(cacheItem.base64Data),
+                    imageSource: cacheItem.base64Data,
                     labels: cacheItem.labels,
                     info: info
                 });

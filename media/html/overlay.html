@@ -12,60 +12,43 @@
     <script nonce="${nonce}" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <title>YOLO Image Annotator</title>
     <style>
+        html,
         body {
-            margin: 0;
-            padding: 0;
             height: 100vh;
             width: 100vw;
-            overflow: scroll;
-            position: relative;
-            background: #1e1e1e;
-        }
-
-        /* Native-like image container */
-        .image-and-canvas-container {
-            width: 100%;
-            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
+            background: #1e1e1e;
+            overflow: hidden;
+        }
+
+        /* Native-like image container */
+        .canvas-container {
+            margin: auto;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
             background: #252526;
             pointer-events: auto;
-            border: 10px solid blue;
+            border: 10px dotted blue;
+            overflow: hidden;
         }
 
         /* Zoomed image container */
-        .image-and-canvas-container.zoomed {
-            /* overflow: scroll; */
+        .canvas-container.zoomed {
+            overflow: scroll;
             cursor: grab;
         }
 
-        .image-and-canvas-container.zoomed:active {
+        .canvas-container.zoomed:active {
             cursor: grabbing;
         }
 
-        .image-and-canvas-container.zoomed #mainImage {
-            transition: none;
-        }
-
-        #imageContainer {
-            width: 100%;
-            height: 100%;
-        }
-
-        #mainImage {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            user-select: none;
-            background: #333;
-        }
-
-        /* Overlay canvas for annotations */
         #annotationCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
+            margin: auto;
+            position: relative;
             pointer-events: auto;
             z-index: 100;
             border: 10px dashed lightgreen;
@@ -345,12 +328,7 @@
 </head>
 
 <body>
-    <div class="image-and-canvas-container" id="imageAndCanvasContainer">
-        <div id="imageContainer">
-            <!-- Don't hardcode the image here, let the preloader handle it -->
-            <!-- <img id="mainImage" src="${imageWebviewUri}" alt="Annotation Image"> -->
-            <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
-        </div>
+    <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
     </div>
 
@@ -441,8 +419,7 @@
         const panelContent = document.getElementById('panelContent');
         const collapseBtn = document.getElementById('collapseBtn');
         const statusIndicator = document.getElementById('statusIndicator');
-        const imageContainer = document.getElementById('imageContainer');
-        const imageAndCanvasContainer = document.getElementById('imageAndCanvasContainer');
+        const canvasContainer = document.getElementById('canvasContainer');
 
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
@@ -499,6 +476,9 @@
         const maxZoom = 5.0;
         const zoomStep = 0.1;
 
+        let imageelem = new Image();
+        imageelem.onload = draw;
+
         function initializeDrawingStateVariables() {
             isDrawing = false;
             drawingMode = false;
@@ -524,44 +504,7 @@
             panStartOffset = null;
         }
 
-        function setupCanvas() {
-            const image = document.getElementById('mainImage');
-            if (!image) {
-                console.warn('Image element not found, retrying...');
-                setTimeout(setupCanvas, 100);
-                return;
-            }
-
-            // Get device pixel ratio
-            const dpr = window.devicePixelRatio || 1;
-
-            // // Set canvas size accounting for DPR
-            // canvas.width = image.naturalWidth * dpr * zoomLevel;
-            // canvas.height = image.naturalHeight * dpr * zoomLevel;
-            // // Scale the context to match DPR
-            // ctx.scale(dpr * zoomLevel, dpr * zoomLevel);
-
-            // Set canvas size accounting for DPR
-            canvas.width = image.naturalWidth * dpr;
-            canvas.height = image.naturalHeight * dpr;
-            // Scale the context to match DPR
-            ctx.scale(dpr, dpr);
-
-            canvas.style.position = 'absolute';
-            canvas.style.top = '0px';
-            canvas.style.left = '0px';
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
-            canvas.style.pointerEvents = 'auto';
-
-            redrawAnnotations();
-            // Apply zoom 
-            updateZoom();
-        }
-
         function redrawAnnotations() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             // Draw existing labels
             currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
@@ -577,6 +520,33 @@
             if (isDrawing && drawingMode && startPos && currentPos) {
                 drawCurrentBox();
             }
+        }
+
+        function draw() {
+            const imageRatio = imageelem.naturalWidth / imageelem.naturalHeight;
+            const containerRect = canvasContainer.getBoundingClientRect();
+            const containerRatio = containerRect.width / containerRect.height;
+
+            var newWidth = zoomLevel, newHeight = zoomLevel;
+
+            if (imageRatio > containerRatio) {
+                // Image is wider than container (relative to height)
+                newWidth *= containerRect.width;
+                newHeight *= containerRect.width / imageRatio;
+            } else {
+                // Image is taller than container (relative to width)
+                newHeight *= containerRect.height;
+                newWidth *= containerRect.height * imageRatio;
+            }
+            console.log(`containerRect.height:${containerRect.height}, containerRect.width:${containerRect.width}`);
+            console.log(`imageRatio:${imageRatio}, containerRatio:${containerRatio}, newWidth:${newWidth}, newHeight:${newHeight}`);
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(imageelem, 0, 0, newWidth, newHeight);
+
+            redrawAnnotations();
         }
 
         function drawBoundingBox(label, isSelected, index) {
@@ -802,13 +772,13 @@
             if (index < 0 || index >= currentLabels.length) return;
             selectedLabelIndex = index;
             updateLabelsList();
-            redrawAnnotations();
+            draw();
         }
 
         function unSelectLabel() {
             selectedLabelIndex = -1;
             updateLabelsList();
-            redrawAnnotations();
+            draw();
         }
 
         function deleteLabel(index) {
@@ -819,7 +789,7 @@
             }
             showDiscardChangesText();
             updateLabelsList();
-            redrawAnnotations();
+            draw();
             showStatus('Label deleted', false);
         }
 
@@ -863,9 +833,8 @@
                 console.warn(`No element found for index:${index}`);
                 return;
             }
-            // update image
-            imageContainer.innerHTML = batchElem.imageHTML;
-            console.log(`innerHTML:${batchElem.imageHTML}`);
+            // update imageimageHTML
+            imageelem.src = batchElem.imageSource;
             // update info
             imageInfoField.textContent = `${batchElem.info.index + 1} / ${batchElem.info.total}`;
 
@@ -875,7 +844,7 @@
             initializeDrawingStateVariables();
             setTimeout(() => {
                 // draw image and info
-                setupCanvas();
+                draw();
             }, 50);
             // update labels
             processLables(batchElem.labels, imageAndLabelBatchBuffer.classes);
@@ -904,49 +873,31 @@
             isDrawing || isInMoveBoxMode || isResizing;
         }
 
-        function zoomIn(e) {
+        function zoomIn() {
             if (zoomLevel < maxZoom) {
                 zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
-                updateZoom(e);
+                updateZoom();
             }
         }
 
-        function zoomOut(e) {
+        function zoomOut() {
             if (zoomLevel > minZoom) {
                 zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
-                updateZoom(e);
+                updateZoom();
             }
         }
 
-        function resetZoom(e) {
+        function resetZoom() {
             zoomLevel = 1.0;
-            updateZoom(e);
+            updateZoom();
         }
 
-        function updateZoom(e) {
-            // if (e) {
-            //     const zoomPanRect = imageAndCanvasContainer.getBoundingClientRect();
-            //     const offsetX = e.clientX - zoomPanRect.left;
-            //     const offsetY = e.clientY - zoomPanRect.top;
-
-            //     // Apply pan to image
-            //     imageAndCanvasContainer.style.transformOrigin = `${(offsetX / zoomPanRect.width) * 100}% ${(offsetY / zoomPanRect.height) * 100}%`;
-            // }
-            // Apply zoom to image
-            // imageAndCanvasContainer.style.transform = `scale(${zoomLevel})`;
-
-
-            // Update zoom display
-            if (zoomLevelDisplay) {
-                zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
-            }
-
-            // Enable/disable zoom buttons
-            if (zoomInBtn) zoomInBtn.disabled = zoomLevel >= maxZoom;
-            if (zoomOutBtn) zoomOutBtn.disabled = zoomLevel <= minZoom;
-
-            // Toggle zoomed class for container styling
-            imageAndCanvasContainer.classList.toggle('zoomed', zoomLevel > 1.0);
+        function updateZoom() {
+            zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
+            console.log(`zoomLevel:${zoomLevel}`);
+            $("#zoomLevel").text(`${Math.round(zoomLevel * 100)}%`);
+            $("#canvasContainer").toggleClass('zoomed', (zoomLevel > 1));
+            draw();
         }
 
         // Update mouse coordinate calculations
@@ -971,7 +922,7 @@
             currentLabels[selectedLabelIndex].cx = Math.max(currentLabels[selectedLabelIndex].w / 2, Math.min(newCX, 1 - currentLabels[selectedLabelIndex].w / 2));
             currentLabels[selectedLabelIndex].cy = Math.max(currentLabels[selectedLabelIndex].h / 2, Math.min(newCY, 1 - currentLabels[selectedLabelIndex].h / 2));;
             updateLabelsList();
-            redrawAnnotations();
+            draw();
             showDiscardChangesText();
         }
 
@@ -1102,11 +1053,11 @@
 
                 currentLabels[selectedLabelIndex] = resizeLabel(originalLabel, resizeHandle, deltaX, deltaY);
                 updateLabelsList();
-                redrawAnnotations();
+                draw();
                 showDiscardChangesText();
             } else if (isDrawing && drawingMode) {
                 currentPos = { x: mouseX, y: mouseY };
-                redrawAnnotations();
+                draw();
             } else if (isInMoveBoxMode) {
                 performMouseMoveBoxMove(mouseX, mouseY);
             } else if (!drawingMode) {
@@ -1161,7 +1112,7 @@
                 addLabelBtn.className = '';
                 canvas.style.cursor = 'auto';
                 controlPanel.classList.toggle('ghosted', drawingMode);
-                redrawAnnotations();
+                draw();
                 showDiscardChangesText();
             }
         });
@@ -1194,10 +1145,9 @@
         function processLables(loadedLabels, loadedClasses) {
             currentLabels = loadedLabels || [];
             classNames = loadedClasses || classNames;
+            selectedLabelIndex = -1;
             updateLabelsList();
             updateZoom();
-            selectedLabelIndex = -1;
-            redrawAnnotations();
         }
 
         function findLabelAtPosition(x, y) {
@@ -1265,8 +1215,7 @@
         // Handle window resize
         window.addEventListener('resize', () => {
             setTimeout(() => {
-                setupCanvas();
-                redrawAnnotations();
+                draw();
             }, 50);
         });
 
@@ -1302,20 +1251,20 @@
                         currentLabels[message.labelIndex].classId = selectedClassIndex;
                         showDiscardChangesText();
                         updateLabelsList();
-                        redrawAnnotations();
+                        draw();
                     }
                     break;
 
                 case 'updateImage':
                     // Process Image
-                    imageContainer.innerHTML = message.html;
+                    imageelem.src = message.src;
                     const info = message.info;
                     imageInfoField.textContent = `${info.index + 1} / ${info.total}`;
                     imageNameField.textContent = `${info.filename}`;
                     currentImageInfo = info;
 
                     initializeDrawingStateVariables();
-                    setTimeout(setupCanvas, 50);
+                    setTimeout(draw, 50);
                     // Process Labels
                     processLables(message.labels, message.classes);
                     break;
