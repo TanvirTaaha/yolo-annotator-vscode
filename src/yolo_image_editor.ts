@@ -215,6 +215,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     });
                     break;
                 case 'loadLabels':
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     const labels = await this.imagePreloader?.getCurrentLabel();
                     webviewPanel.webview.postMessage({
                         command: 'labelsLoaded',

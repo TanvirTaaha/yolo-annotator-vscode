@@ -18,7 +18,7 @@
         #image-container {
             width: 80%; /* Adjust as needed */
             height: 80vh; /* Adjust as needed */
-            display: flex;
+            display:block;
             justify-content: center;
             align-items: center;
             border: 2px solid #ccc;
@@ -26,6 +26,18 @@
             position: relative; /* For potential future positioning of controls */
             background-color: #fff;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #zoom-and-pan-container {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            transform-origin: center center; /* Zoom from the center */
+            transition: transform 0.05s ease-out; /* Smooth transition for zoom */
+            cursor: grab; /* Indicate it's draggable */
+            user-select: none; /* Prevent text selection on the image */
+            justify-content: center;
+            overflow: hidden;
         }
 
         #zoom-image {
@@ -42,12 +54,16 @@
 <body>
 
     <div id="image-container">
-        <img id="zoom-image" src="https://hopon.no/wp-content/uploads/2024/03/hop-on-hop-off-sightseeing-tour-bus-aalesund-attractions-aksla-byrampen.webp" alt="Zoomable Image">
+        <div id="zoom-and-pan-container">
+            <img id="zoom-image" src="https://hopon.no/wp-content/uploads/2024/03/hop-on-hop-off-sightseeing-tour-bus-aalesund-attractions-aksla-byrampen.webp" alt="Zoomable Image">
+        </div>
     </div>
 
     <script>
         const zoomImage = document.getElementById('zoom-image');
+        const zoomPanContainer = document.getElementById('zoom-and-pan-container');
         const imageContainer = document.getElementById('image-container');
+
         let scale = 1;
         const scaleStep = 0.1; // How much to zoom in/out each step
         let isDragging = false;
@@ -68,7 +84,6 @@
         });
 
         function updateImageTransform(e) {
-
             zoomImage.style.transform = `scale(${scale}) translate(${currentX}px, ${currentY}px)`;
         }
 
@@ -99,7 +114,20 @@
             isDragging = false;
             zoomImage.style.cursor = 'grab';
         });
+        function showDisplayRect() {
+            const imageContRect = imageContainer.getBoundingClientRect();
+            const zoomContRect = zoomPanContainer.getBoundingClientRect();
+            const imageRect = zoomImage.getBoundingClientRect();
+            
+            console.log(`imageContRect: x:${imageContRect.x} y:${imageContRect.y} height:${imageContRect.height} width:${imageContRect.width}`);
+            console.log(`zoomContRect: x:${zoomContRect.x} y:${zoomContRect.y} height:${zoomContRect.height} width:${zoomContRect.width}`);
+            console.log(`imageRect: x:${imageRect.x} y:${imageRect.y} height:${imageRect.height} width:${imageRect.width}`);
+            
+        }
 
+        setInterval(() => {
+            showDisplayRect();
+        }, 100);
     </script>
 
 </body>

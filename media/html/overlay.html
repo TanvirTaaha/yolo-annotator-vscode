@@ -3,34 +3,59 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob: file:; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; 
+        style-src ${webview.cspSource} 'unsafe-inline'; 
+        img-src ${webview.cspSource} data: blob: file:; 
+        script-src 'nonce-${nonce}' https://code.jquery.com;
+        connect-src https:;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script nonce="${nonce}" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <title>YOLO Image Annotator</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             height: 100vh;
-            overflow: hidden;
+            width: 100vw;
+            overflow: scroll;
             position: relative;
             background: #1e1e1e;
         }
 
         /* Native-like image container */
-        .image-container {
+        .image-and-canvas-container {
             width: 100%;
             height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
             background: #252526;
+            pointer-events: auto;
+            border: 10px solid blue;
+        }
+
+        /* Zoomed image container */
+        .image-and-canvas-container.zoomed {
+            /* overflow: scroll; */
+            cursor: grab;
+        }
+
+        .image-and-canvas-container.zoomed:active {
+            cursor: grabbing;
+        }
+
+        .image-and-canvas-container.zoomed #mainImage {
+            transition: none;
+        }
+
+        #imageContainer {
+            width: 100%;
+            height: 100%;
         }
 
         #mainImage {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
             user-select: none;
             background: #333;
@@ -41,8 +66,13 @@
             position: absolute;
             top: 0;
             left: 0;
-            pointer-events: none;
-            z-index: 10;
+            pointer-events: auto;
+            z-index: 100;
+            border: 10px dashed lightgreen;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
 
         /* Floating control panel */
@@ -176,6 +206,22 @@
             flex: 1;
         }
 
+        /* Zooming controls */
+        .zoom-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .zoom-level {
+            font-size: 11px;
+            color: #bbbbbb;
+            text-align: center;
+            user-select: none;
+            flex: 1;
+        }
+
         /* Labels list in floating panel */
         .labels-list {
             max-height: 200px;
@@ -299,14 +345,14 @@
 </head>
 
 <body>
-    <div class="image-container">
-                <div id="imageContainer">
+    <div class="image-and-canvas-container" id="imageAndCanvasContainer">
+        <div id="imageContainer">
             <!-- Don't hardcode the image here, let the preloader handle it -->
             <!-- <img id="mainImage" src="${imageWebviewUri}" alt="Annotation Image"> -->
-                    <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
-                </div>
-                <canvas id="annotationCanvas"></canvas>
-            </div>
+            <div style="color: #888; text-align: center; padding: 50px;">Loading image...</div>
+        </div>
+        <canvas id="annotationCanvas"></canvas>
+    </div>
 
     <!-- Floating Control Panel -->
     <div class="control-panel" id="controlPanel">
@@ -327,6 +373,16 @@
                     <button id="prevBtn" title="Previous Image (←)">‹</button>
                     <div class="image-info" id="imageInfoField">Loading...</div>
                     <button id="nextBtn" title="Next Image (→)">›</button>
+                </div>
+            </div>
+
+
+            <!-- Zoom Section -->
+            <div class="control-section">
+                <div class="zoom-controls" id="zoomControls">
+                    <button id="zoomOutBtn" title="Zoom Out (-)">−</button>
+                    <div class="zoom-level" id="zoomLevel" title="Double tap to reset">100%</div>
+                    <button id="zoomInBtn" title="Zoom In (+)">+</button>
                 </div>
             </div>
 
@@ -386,6 +442,7 @@
         const collapseBtn = document.getElementById('collapseBtn');
         const statusIndicator = document.getElementById('statusIndicator');
         const imageContainer = document.getElementById('imageContainer');
+        const imageAndCanvasContainer = document.getElementById('imageAndCanvasContainer');
 
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
@@ -398,6 +455,13 @@
         const labelsList = document.getElementById('labelsList');
         const labelCount = document.getElementById('labelCount');
         const discardChanges = document.getElementById('discardChanges');
+
+        // Zoom elements
+        const zoomControls = document.getElementById('zoomControls');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const zoomLevelDisplay = document.getElementById('zoomLevel');
+
 
         // State
         let imageAndLabelBatchBuffer = {};
@@ -428,6 +492,13 @@
         let moveStartPos = null;
         let moveStartLabelCenter = null;
 
+        // Zoom state
+        let zoomLevel = 1.0;
+        let panStartPos = null;
+        const minZoom = 1.0;
+        const maxZoom = 5.0;
+        const zoomStep = 0.1;
+
         function initializeDrawingStateVariables() {
             isDrawing = false;
             drawingMode = false;
@@ -448,6 +519,9 @@
             moveStartLabelCenter = null;
             // Unselect label
             selectedLabelIndex = -1;
+            // Reset zoom pan state
+            panStartPos = null;
+            panStartOffset = null;
         }
 
         function setupCanvas() {
@@ -457,25 +531,32 @@
                 setTimeout(setupCanvas, 100);
                 return;
             }
-            const rect = image.getBoundingClientRect();
-            canvas.width = image.naturalWidth;
-            canvas.height = image.naturalHeight;
-            canvas.style.width = rect.width + 'px';
-            canvas.style.height = rect.height + 'px';
+
+            // Get device pixel ratio
+            const dpr = window.devicePixelRatio || 1;
+
+            // // Set canvas size accounting for DPR
+            // canvas.width = image.naturalWidth * dpr * zoomLevel;
+            // canvas.height = image.naturalHeight * dpr * zoomLevel;
+            // // Scale the context to match DPR
+            // ctx.scale(dpr * zoomLevel, dpr * zoomLevel);
+
+            // Set canvas size accounting for DPR
+            canvas.width = image.naturalWidth * dpr;
+            canvas.height = image.naturalHeight * dpr;
+            // Scale the context to match DPR
+            ctx.scale(dpr, dpr);
+
             canvas.style.position = 'absolute';
-            canvas.style.top = rect.top + 'px';
-            canvas.style.left = rect.left + 'px';
+            canvas.style.top = '0px';
+            canvas.style.left = '0px';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
             canvas.style.pointerEvents = 'auto';
 
             redrawAnnotations();
-        }
-
-        function loadImageLabels() {
-            // Request labels for current image
-            vscode.postMessage({
-                command: 'loadLabels',
-                imagePath: '${imageUri.fsPath}'
-            });
+            // Apply zoom 
+            updateZoom();
         }
 
         function redrawAnnotations() {
@@ -718,6 +799,7 @@
         }
 
         function selectLabel(index) {
+            if (index < 0 || index >= currentLabels.length) return;
             selectedLabelIndex = index;
             updateLabelsList();
             redrawAnnotations();
@@ -730,6 +812,7 @@
         }
 
         function deleteLabel(index) {
+            if (index < 0 || index >= currentLabels.length) return;
             currentLabels.splice(index, 1);
             if (selectedLabelIndex >= index) {
                 selectedLabelIndex = selectedLabelIndex > 0 ? selectedLabelIndex - 1 : -1;
@@ -750,6 +833,7 @@
 
         // Show popup and initialize input with selected label's class
         function showPopup(index) {
+            if (index < 0 || index >= currentLabels.length) return;
             popupIsShowing = true;
             popupTargetIndex = index;
             vscode.postMessage({
@@ -781,6 +865,7 @@
             }
             // update image
             imageContainer.innerHTML = batchElem.imageHTML;
+            console.log(`innerHTML:${batchElem.imageHTML}`);
             // update info
             imageInfoField.textContent = `${batchElem.info.index + 1} / ${batchElem.info.total}`;
 
@@ -813,6 +898,81 @@
                         .filter(([index, batchElem]) => index >= minKeepIndex && index <= maxKeepIndex)
                 );
             }
+        }
+
+        function isAnyActivityRunning() {
+            isDrawing || isInMoveBoxMode || isResizing;
+        }
+
+        function zoomIn(e) {
+            if (zoomLevel < maxZoom) {
+                zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
+                updateZoom(e);
+            }
+        }
+
+        function zoomOut(e) {
+            if (zoomLevel > minZoom) {
+                zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
+                updateZoom(e);
+            }
+        }
+
+        function resetZoom(e) {
+            zoomLevel = 1.0;
+            updateZoom(e);
+        }
+
+        function updateZoom(e) {
+            // if (e) {
+            //     const zoomPanRect = imageAndCanvasContainer.getBoundingClientRect();
+            //     const offsetX = e.clientX - zoomPanRect.left;
+            //     const offsetY = e.clientY - zoomPanRect.top;
+
+            //     // Apply pan to image
+            //     imageAndCanvasContainer.style.transformOrigin = `${(offsetX / zoomPanRect.width) * 100}% ${(offsetY / zoomPanRect.height) * 100}%`;
+            // }
+            // Apply zoom to image
+            // imageAndCanvasContainer.style.transform = `scale(${zoomLevel})`;
+
+
+            // Update zoom display
+            if (zoomLevelDisplay) {
+                zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + '%';
+            }
+
+            // Enable/disable zoom buttons
+            if (zoomInBtn) zoomInBtn.disabled = zoomLevel >= maxZoom;
+            if (zoomOutBtn) zoomOutBtn.disabled = zoomLevel <= minZoom;
+
+            // Toggle zoomed class for container styling
+            imageAndCanvasContainer.classList.toggle('zoomed', zoomLevel > 1.0);
+        }
+
+        // Update mouse coordinate calculations
+        function getMousePos(canvas, event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            return {
+                x: (event.clientX - rect.left) * scaleX,
+                y: (event.clientY - rect.top) * scaleY
+            };
+        }
+
+        function performMouseMoveBoxMove(mouseX, mouseY) {
+            const deltaX = (mouseX - moveStartPos.x) / canvas.width;
+            const deltaY = (mouseY - moveStartPos.y) / canvas.height;
+
+            const newCX = moveStartLabelCenter.cx + deltaX;
+            const newCY = moveStartLabelCenter.cy + deltaY;
+            var changed = false;
+            currentLabels[selectedLabelIndex].cx = Math.max(currentLabels[selectedLabelIndex].w / 2, Math.min(newCX, 1 - currentLabels[selectedLabelIndex].w / 2));
+            currentLabels[selectedLabelIndex].cy = Math.max(currentLabels[selectedLabelIndex].h / 2, Math.min(newCY, 1 - currentLabels[selectedLabelIndex].h / 2));;
+            updateLabelsList();
+            redrawAnnotations();
+            showDiscardChangesText();
         }
 
         // Event Listeners
@@ -880,10 +1040,10 @@
 
         var canvasClicked = false;
         // Canvas interaction
-        canvas.addEventListener('mousedown', (e) => {          
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(canvas, e);
+            const mouseX = pos.x;
+            const mouseY = pos.y;
 
             if (drawingMode) {
                 startPos = { x: mouseX, y: mouseY };
@@ -913,9 +1073,11 @@
                             cx: currentLabels[selectedLabelIndex].cx,
                             cy: currentLabels[selectedLabelIndex].cy
                         };
+                        canvas.style.cursor = 'move';
                         break;
                     default:
                         selectLabel(clickedIndex);
+                        canvas.style.cursor = 'move';
                         break;
                 }
                 if (!canvasClicked) {
@@ -925,14 +1087,14 @@
                     selectLabel(clickedIndex);
                     showPopup(clickedIndex);
                 }
-                setTimeout(() => canvasClicked = false, 500); // After a while forget the first click
+                setTimeout(() => canvasClicked = false, 200); // After a while forget the first click
             }
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const pos = getMousePos(canvas, e);
+            const mouseX = pos.x;
+            const mouseY = pos.y;
 
             if (isResizing && selectedLabelIndex !== -1) {
                 const deltaX = mouseX - resizeStartPos.x;
@@ -946,40 +1108,16 @@
                 currentPos = { x: mouseX, y: mouseY };
                 redrawAnnotations();
             } else if (isInMoveBoxMode) {
-                const deltaX = (mouseX - moveStartPos.x) / canvas.width;
-                const deltaY = (mouseY - moveStartPos.y) / canvas.height;
-
-                const newCX = moveStartLabelCenter.cx + deltaX;
-                const newCY = moveStartLabelCenter.cy + deltaY;
-                var changed = false;
-                if (
-                    newCX >= currentLabels[selectedLabelIndex].w / 2 &&      // left limit
-                    newCX <= 1 - currentLabels[selectedLabelIndex].w / 2     // right limit
-                ) {
-                    currentLabels[selectedLabelIndex].cx = newCX;
-                    changed = true;
-                }
-                if (
-                    newCY >= currentLabels[selectedLabelIndex].h / 2 &&      // top limit
-                    newCY <= 1 - currentLabels[selectedLabelIndex].h / 2     // bottom limit
-                ) {
-                    currentLabels[selectedLabelIndex].cy = newCY;
-                    changed = true;
-                }
-                if (changed) {
-                    updateLabelsList();
-                    redrawAnnotations();
-                    showDiscardChangesText();
-                }
+                performMouseMoveBoxMove(mouseX, mouseY);
             } else if (!drawingMode) {
                 // Update cursor based on what's under the mouse
                 const handle = getResizeHandle(mouseX, mouseY);
                 if (handle && selectedLabelIndex !== -1) {
                     canvas.style.cursor = getCursorForHandle(handle);
                 } else if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
-                    canvas.style.cursor = 'grab';
+                    canvas.style.cursor = 'move';
                 } else {
-                    canvas.style.cursor = 'default';
+                    canvas.style.cursor = 'auto';
                 }
             }
         });
@@ -990,11 +1128,12 @@
                 resizeHandle = null;
                 resizeStartPos = null;
                 originalLabel = null;
-                canvas.style.cursor = 'default';
+                canvas.style.cursor = 'auto';
             } else if (isInMoveBoxMode) {
                 isInMoveBoxMode = false;
                 moveStartPos = null;
                 moveStartLabelCenter = null;
+                canvas.style.cursor = 'move';
             } else if (isDrawing && drawingMode && startPos && currentPos) {
                 const x = Math.min(startPos.x, currentPos.x);
                 const y = Math.min(startPos.y, currentPos.y);
@@ -1020,17 +1159,44 @@
                 drawingMode = false;
                 addLabelBtn.textContent = 'Add Box';
                 addLabelBtn.className = '';
-                canvas.style.cursor = 'default';
+                canvas.style.cursor = 'auto';
                 controlPanel.classList.toggle('ghosted', drawingMode);
                 redrawAnnotations();
                 showDiscardChangesText();
             }
         });
 
+        canvas.addEventListener('mouseleave', (e) => {
+            if (isInMoveBoxMode) { // Last mouse move that might have been missed due to fast mouse movement
+                const pos = getMousePos(canvas, e);
+                performMouseMoveBoxMove(pos.x, pos.y);
+            }
+            isInMoveBoxMode = false;
+            moveStartPos = null;
+            moveStartLabelCenter = null;
+        });
+
+        // Zoom control event listeners
+        zoomInBtn.addEventListener('click', zoomIn);
+        zoomOutBtn.addEventListener('click', zoomOut);
+        zoomLevelDisplay.addEventListener('dblclick', resetZoom);
+        // Mouse wheel zoom
+        canvas.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                zoomIn();
+            } else {
+                zoomOut();
+            }
+        }, { passive: false });
+
         function processLables(loadedLabels, loadedClasses) {
             currentLabels = loadedLabels || [];
             classNames = loadedClasses || classNames;
             updateLabelsList();
+            updateZoom();
+            selectedLabelIndex = -1;
             redrawAnnotations();
         }
 
@@ -1098,8 +1264,10 @@
 
         // Handle window resize
         window.addEventListener('resize', () => {
-            setTimeout(setupCanvas, 100);
-            setTimeout(redrawAnnotations, 100);
+            setTimeout(() => {
+                setupCanvas();
+                redrawAnnotations();
+            }, 50);
         });
 
         // Handle messages from extension
@@ -1109,6 +1277,7 @@
                 case 'takeTheseSettings':
                     settings = message.settings
                     break;
+
                 case 'labelsLoaded':
                     processLables(message.labels, message.classes);
                     break;
@@ -1194,7 +1363,8 @@
                         case 'discard':
                             hideDiscardChangesText();
                             vscode.postMessage({
-                                command: 'loadLabels'
+                                command: 'loadLabels',
+                                currentImageIndex: currentImageInfo.index
                             });
                             showStatus("Discarded.", true);
                             break;
