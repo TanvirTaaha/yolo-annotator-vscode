@@ -16,42 +16,31 @@
         body {
             height: 100vh;
             width: 100vw;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             background: #1e1e1e;
+            box-sizing: border-box;
             overflow: hidden;
         }
 
         /* Native-like image container */
         .canvas-container {
-            margin: auto;
-            position: relative;
             width: 100%;
             height: 100%;
-            display: flex;
+            margin: auto;
+            position: relative;
+            justify-content: center;
+            align-items: center;
             background: #252526;
+            box-sizing: border-box;
             pointer-events: auto;
-            border: 10px dotted blue;
             overflow: hidden;
         }
 
-        /* Zoomed image container */
-        .canvas-container.zoomed {
-            overflow: scroll;
-            cursor: grab;
-        }
-
-        .canvas-container.zoomed:active {
-            cursor: grabbing;
-        }
-
         #annotationCanvas {
-            margin: auto;
             position: relative;
             pointer-events: auto;
             z-index: 100;
-            border: 10px dashed lightgreen;
+            margin: auto;
+            box-sizing: border-box;
             image-rendering: -moz-crisp-edges;
             image-rendering: -webkit-crisp-edges;
             image-rendering: pixelated;
@@ -475,6 +464,8 @@
         const minZoom = 1.0;
         const maxZoom = 5.0;
         const zoomStep = 0.1;
+        const minFontSize = 10, maxFontSize = 48;
+
 
         let imageelem = new Image();
         imageelem.onload = draw;
@@ -538,13 +529,21 @@
                 newHeight *= containerRect.height;
                 newWidth *= containerRect.height * imageRatio;
             }
-            console.log(`containerRect.height:${containerRect.height}, containerRect.width:${containerRect.width}`);
-            console.log(`imageRatio:${imageRatio}, containerRatio:${containerRatio}, newWidth:${newWidth}, newHeight:${newHeight}`);
-            canvas.width = newWidth;
-            canvas.height = newHeight;
+            canvas.width = imageelem.naturalWidth;
+            canvas.height = imageelem.naturalHeight;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(imageelem, 0, 0, newWidth, newHeight);
+            ctx.drawImage(imageelem, 0, 0, imageelem.naturalWidth, imageelem.naturalHeight);
+            
+            const canvasLeft = Math.max(0, (containerRect.width - newWidth) / 2);
+            const canvasTop = Math.max(0, (containerRect.height - newHeight) / 2);
+            console.log(`canvasTop: ${canvasTop}, canvasLeft: ${canvasLeft}`);
+            $("#annotationCanvas").css({
+                top: `${canvasTop}px`,
+                left: `${canvasLeft}px`,
+                width: newWidth,
+                height: newHeight
+            });
 
             redrawAnnotations();
         }
@@ -554,7 +553,8 @@
             const y = (label.cy - label.h / 2) * canvas.height;
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
-
+            console.log(`canvas.width:${canvas.width}, canvas.height:${canvas.height}`);
+            console.log(`x:${x}, y:${y}, width:${width}, height:${height}`);
             // Box
             ctx.strokeStyle = isSelected ? '#ff4444' : '#44ff44';
             ctx.lineWidth = isSelected ? 3 : 2;
@@ -564,15 +564,18 @@
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
 
-            ctx.font = '12px Arial';
-            const textWidth = ctx.measureText(labelText).width;
+            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(12 * zoomLevel)));
+            ctx.font = `${fontSize}px Arial`;
 
+            // Draw text background rect
             ctx.fillStyle = isSelected ? '#ff4444' : '#44ff44';
-            ctx.fillRect(x, y - 20, textWidth + 8, 18);
+            const bgRectWidth = ctx.measureText(labelText).width + 8;
+            const bgRectHeight = fontSize * 1.5;
+            ctx.fillRect(x, (y - bgRectHeight), bgRectWidth, bgRectHeight);
 
             // Label text
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(labelText, x + 4, y - 6);
+            ctx.fillText(labelText, x + 4, y - (fontSize * 0.4));
         }
 
         function getHandles(x, y, width, height) {
@@ -896,7 +899,7 @@
             zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
             console.log(`zoomLevel:${zoomLevel}`);
             $("#zoomLevel").text(`${Math.round(zoomLevel * 100)}%`);
-            $("#canvasContainer").toggleClass('zoomed', (zoomLevel > 1));
+            $("#canvasContainer").css('overflow', (zoomLevel > 1) ? 'auto' : 'hidden');
             draw();
         }
 
@@ -1213,11 +1216,7 @@
         });
 
         // Handle window resize
-        window.addEventListener('resize', () => {
-            setTimeout(() => {
-                draw();
-            }, 50);
-        });
+        window.addEventListener('resize',draw);
 
         // Handle messages from extension
         window.addEventListener('message', (e) => {

@@ -109,7 +109,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             htmlContent = htmlContent.replace(/\$\{showShortcutsHelp\}/g, showShortcutsHelp ? 'show' : 'hide');
             htmlContent = htmlContent.replace(/\$\{handleSize\}/g, `${handleSize}`);
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
-
+            console.log(`webview.cspSource:\"${webview.cspSource}\"`);
             return htmlContent;
         } catch (error) {
             console.error("Error reading HTML file:", error);
