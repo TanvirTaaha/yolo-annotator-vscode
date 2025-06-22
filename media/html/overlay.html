@@ -537,7 +537,6 @@
             
             const canvasLeft = Math.max(0, (containerRect.width - newWidth) / 2);
             const canvasTop = Math.max(0, (containerRect.height - newHeight) / 2);
-            console.log(`canvasTop: ${canvasTop}, canvasLeft: ${canvasLeft}`);
             $("#annotationCanvas").css({
                 top: `${canvasTop}px`,
                 left: `${canvasLeft}px`,
@@ -553,8 +552,6 @@
             const y = (label.cy - label.h / 2) * canvas.height;
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
-            console.log(`canvas.width:${canvas.width}, canvas.height:${canvas.height}`);
-            console.log(`x:${x}, y:${y}, width:${width}, height:${height}`);
             // Box
             ctx.strokeStyle = isSelected ? '#ff4444' : '#44ff44';
             ctx.lineWidth = isSelected ? 3 : 2;
@@ -897,7 +894,6 @@
 
         function updateZoom() {
             zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
-            console.log(`zoomLevel:${zoomLevel}`);
             $("#zoomLevel").text(`${Math.round(zoomLevel * 100)}%`);
             $("#canvasContainer").css('overflow', (zoomLevel > 1) ? 'auto' : 'hidden');
             draw();
