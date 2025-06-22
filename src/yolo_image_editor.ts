@@ -205,6 +205,29 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         });
     }
 
+    private async reloadWithDifferentDocument(webviewPanel: vscode.WebviewPanel, newDocumentPath: string): Promise<void> {
+        try {
+            // Get the new document URI
+            const newUri = vscode.Uri.file(newDocumentPath);
+
+            // Check if the file exists
+            if (!fs.existsSync(newDocumentPath)) {
+                vscode.window.showErrorMessage(`File not found: ${newDocumentPath}`);
+                return;
+            }
+
+            // Close the current editor panel
+            webviewPanel.dispose();
+
+            // Open the new document with the same custom editor
+            await vscode.commands.executeCommand('vscode.openWith', newUri, 'yolo-annotator.imageEditor');
+
+        } catch (error) {
+            console.error('Failed to reload with different document:', error);
+            vscode.window.showErrorMessage(`Failed to reload editor: ${error}`);
+        }
+    }
+
     private async setupMessageHandling(webviewPanel: vscode.WebviewPanel, document: YOLOImageDocument): Promise<void> {
         webviewPanel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
@@ -284,6 +307,11 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         command: 'discardChangesChoiceResult',
                         result: discardResult
                     });
+                    break;
+
+                case 'reloadWindow':
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
+                    await this.reloadWithDifferentDocument(webviewPanel, this.imagePreloader?.getCurrentImagePath() || document.uri.fsPath);
                     break;
             }
         });

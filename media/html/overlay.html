@@ -102,6 +102,19 @@
             color: #00aeff;
         }
 
+        .reload-btn {
+            background: none;
+            border: 2px solid transparent;
+            color: #cccccc;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 5px;
+        }
+
+        .reload-btn:hover {
+            border-color: #007acc;
+        }
+        
         .collapse-btn {
             background: none;
             border: 2px solid transparent;
@@ -326,6 +339,7 @@
     <div class="control-panel" id="controlPanel">
         <div class="panel-header">
             <span class="panel-title">YOLO Annotator</span>
+            <button class="reload-btn" id="reloadBtn">&#x21bb;</button>
             <button class="collapse-btn" id="collapseBtn">−</button>
         </div>
 
@@ -931,6 +945,13 @@
         collapseBtn.addEventListener('click', () => {
             controlPanel.classList.toggle('collapsed');
             collapseBtn.textContent = controlPanel.classList.contains('collapsed') ? '+' : '−';
+        });
+
+        $("#reloadBtn").click(() => {
+            vscode.postMessage({
+                command: 'reloadWindow',
+                currentImageIndex: currentImageInfo.index
+            });
         });
 
         addLabelBtn.addEventListener('click', () => {
