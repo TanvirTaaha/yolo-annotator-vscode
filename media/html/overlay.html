@@ -278,6 +278,7 @@
             z-index: 100;
             opacity: 0.2;
             transition: opacity 0.3s;
+            user-select: none;
         }
 
         #shortcutHelp.hide {
@@ -534,7 +535,7 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(imageelem, 0, 0, imageelem.naturalWidth, imageelem.naturalHeight);
-            
+
             const canvasLeft = Math.max(0, (containerRect.width - newWidth) / 2);
             const canvasTop = Math.max(0, (containerRect.height - newHeight) / 2);
             $("#annotationCanvas").css({
@@ -900,14 +901,14 @@
         }
 
         // Update mouse coordinate calculations
-        function getMousePos(canvas, event) {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
+        function getMousePosOnCanvas(canvas, event) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
 
             return {
-                x: (event.clientX - rect.left) * scaleX,
-                y: (event.clientY - rect.top) * scaleY
+                x: Math.max(0, Math.min(canvas.width, (event.clientX - canvasRect.left) * scaleX)),
+                y: Math.max(0, Math.min(canvas.height, (event.clientY - canvasRect.top) * scaleY))
             };
         }
 
@@ -990,8 +991,8 @@
 
         var canvasClicked = false;
         // Canvas interaction
-        canvas.addEventListener('mousedown', (e) => {
-            const pos = getMousePos(canvas, e);
+        window.addEventListener('mousedown', (e) => {
+            const pos = getMousePosOnCanvas(canvas, e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
@@ -1041,8 +1042,8 @@
             }
         });
 
-        canvas.addEventListener('mousemove', (e) => {
-            const pos = getMousePos(canvas, e);
+        window.addEventListener('mousemove', (e) => {
+            const pos = getMousePosOnCanvas(canvas, e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
@@ -1072,7 +1073,7 @@
             }
         });
 
-        canvas.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', (e) => {
             if (isResizing) {
                 isResizing = false;
                 resizeHandle = null;
@@ -1116,22 +1117,12 @@
             }
         });
 
-        canvas.addEventListener('mouseleave', (e) => {
-            if (isInMoveBoxMode) { // Last mouse move that might have been missed due to fast mouse movement
-                const pos = getMousePos(canvas, e);
-                performMouseMoveBoxMove(pos.x, pos.y);
-            }
-            isInMoveBoxMode = false;
-            moveStartPos = null;
-            moveStartLabelCenter = null;
-        });
-
         // Zoom control event listeners
         zoomInBtn.addEventListener('click', zoomIn);
         zoomOutBtn.addEventListener('click', zoomOut);
         zoomLevelDisplay.addEventListener('dblclick', resetZoom);
         // Mouse wheel zoom
-        canvas.addEventListener('wheel', (e) => {
+        window.addEventListener('wheel', (e) => {
             if (!e.ctrlKey) return;
             e.preventDefault();
             if (e.deltaY < 0) {
@@ -1212,7 +1203,7 @@
         });
 
         // Handle window resize
-        window.addEventListener('resize',draw);
+        window.addEventListener('resize', draw);
 
         // Handle messages from extension
         window.addEventListener('message', (e) => {
