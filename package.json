@@ -85,6 +85,14 @@
           "maximum": 64,
           "description": "Size of the mouse anchor marker while resizing bounding box in pixels",
           "scope": "resource"
+        },
+        "yoloAnnotator.ui.fontSize": {
+          "type": "number",
+          "default": 16,
+          "minimum": 10,
+          "maximum": 64,
+          "description": "Font size of class names on top of bounding box",
+          "scope": "resource"
         }
       }
     },

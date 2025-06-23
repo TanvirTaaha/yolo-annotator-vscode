@@ -499,9 +499,8 @@
         const minZoom = 1.0;
         const maxZoom = 5.0;
         const zoomStep = 0.1;
-        const minFontSize = 14, maxFontSize = 18;
+        let fontSize = 16;
         let mousePosBeforeZoom = { x: 0, y: 0 };
-        let dpr = 1;
 
 
         let imageelem = new Image();
@@ -530,6 +529,8 @@
             // Reset zoom pan state
             panStartPos = null;
             panStartOffset = null;
+            fontSize = settings ? settings.ui.fontSize : fontSize;
+            mousePosBeforeZoom = { x: 0, y: 0 };
         }
 
         function redrawAnnotations() {
@@ -609,15 +610,14 @@
             // Label background
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
-            
-            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(14 * zoomLevel)));
+
             ctx.font = `${fontSize}px 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif`;
-            
+
             // Draw text background rect
             ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId].replace(', 1)', ', 1)');
             const bgRectWidth = ctx.measureText(labelText).width + 8;
             const bgRectHeight = fontSize * 1.5;
-            
+
             ctx.fillRect(x, (y > bgRectHeight) ? (y - bgRectHeight) : y, bgRectWidth, bgRectHeight);
 
             // Label text
