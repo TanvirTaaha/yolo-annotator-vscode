@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Translucent Rectangle with Dotted Corners</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="myCanvas" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Rectangle properties
+        const rectX = 100;
+        const rectY = 80;
+        const rectWidth = 400;
+        const rectHeight = 250;
+        const baseColor = 'rgba(0, 128, 255, 1)'; // Solid blue for reference
+
+        // --- Draw the Rectangle ---
+
+        // Set the fill color with translucency (alpha value 0.3 for 30% opacity)
+        ctx.fillStyle = baseColor.replace(', 1)', ', 0.3)'); // Change alpha to 0.3
+        ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
+
+        // Set the stroke color for a minimal border (same color, almost solid)
+        ctx.strokeStyle = baseColor.replace(', 1)', ', 0.9)'); // Almost solid for minimal border effect
+        ctx.lineWidth = 1; // Very minimal border width
+        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+
+        // --- Draw the Dotted Corner Points ---
+
+        const dotRadius = 5; // Size of the corner dots
+        const dotColor = baseColor.replace(', 1)', ', 0.8)'); // Slightly less translucent than fill
+
+        // Function to draw a single dot
+        function drawDot(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+            ctx.fillStyle = dotColor;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // Top-left corner
+        drawDot(rectX, rectY);
+        // Top-right corner
+        drawDot(rectX + rectWidth, rectY);
+        // Bottom-left corner
+        drawDot(rectX, rectY + rectHeight);
+        // Bottom-right corner
+        drawDot(rectX + rectWidth, rectY + rectHeight);
+
+        // Add a small label for clarity (optional)
+        ctx.fillStyle = getInverseTextColor(baseColor);
+        ctx.font = `14px Poppins, 'Luckiest Guy', 'NCL Neovibes', 'Cocogoose Narrows', sans-serif`;
+        ctx.fillText('Translucent Rectangle with Dotted Corners', rectX+15, rectY + 45);
+        // ctx.strokeStyle = '#000000';
+        // ctx.strokeText('Translucent Rectangle with Dotted Corners', rectX, rectY - 15);
+
+        function getInverseTextColor(backgroundColor) {
+            // Remove the hash (#) symbol if it's there
+            if (backgroundColor.startsWith('#')) {
+                backgroundColor = backgroundColor.slice(1);
+            }
+
+            // Parse the hex color to get the red, green, and blue values
+            const r = parseInt(backgroundColor.substring(0, 2), 16);
+            const g = parseInt(backgroundColor.substring(2, 4), 16);
+            const b = parseInt(backgroundColor.substring(4, 6), 16);
+
+            // Calculate the brightness using the formula for luminance
+            const brightness = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+            // If the brightness is greater than a threshold, return black text; else, white text
+            return brightness > 128 ? '#000000' : '#FFFFFF';
+        }
+
+        // Example usage
+        const backgroundColor = '#ff6d00';  // Orange color
+        const textColor = getInverseTextColor(backgroundColor);
+        console.log(textColor);  // Outputs: #000000 (Black)
+    </script>
+
+</body>
+
+</html>

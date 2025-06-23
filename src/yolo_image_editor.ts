@@ -11,6 +11,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private classesPath = '';
     private classes = new Array<string>();
     private stopWorking = false;
+    private classColors: string[] = [];
 
     constructor(private readonly context: vscode.ExtensionContext) { }
 
@@ -87,6 +88,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         }
         try {
             this.classes = fs.readFileSync(this.classesPath, 'utf8').split('\n').filter(line => line.trim());
+            this.classColors = new Colors().getColors(this.classes.length);
         } catch (error) {
             console.error("Can't find classes.txt");
             vscode.window.showErrorMessage("Failed to load the classes.txt file. Please put it in the parent directory or images/labels folder.");
@@ -198,7 +200,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 webview.postMessage({
                     command: 'updateImageAndLabelBuffer',
                     batchElement: batchElem,
-                    classes: this.classes
+                    classes: this.classes,
+                    classColors: this.classColors
                 });
             }
         }
@@ -245,7 +248,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     webviewPanel.webview.postMessage({
                         command: 'labelsLoaded',
                         labels: labels,
-                        classes: this.classes
+                        classes: this.classes,
+                        classColors: this.classColors
                     });
                     break;
 
@@ -266,7 +270,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         src: currentSrc,
                         info: currentInfo,
                         labels: currentLabels,
-                        classes: this.classes
+                        classes: this.classes,
+                        classColors: this.classColors
                     });
                     break;
 
@@ -334,5 +339,76 @@ class YOLOImageDocument implements vscode.CustomDocument {
 
     dispose(): void {
         // Cleanup if needed
+    }
+}
+
+
+class Colors {
+    private colorPallete = [
+        "rgba(0, 128, 255, 1)",
+        "rgba(123, 44, 191, 1)",
+        "rgba(115, 210, 222, 1)",
+        "rgba(60, 39, 108, 1)",
+        "rgba(17, 230, 216, 1)",
+        "rgba(33, 131, 128, 1)",
+        "rgba(90, 24, 144, 1)",
+        "rgba(61, 110, 118, 1)",
+        "rgba(74, 171, 175, 1)",
+        "rgba(25, 37, 173, 1)",
+        "rgba(157, 78, 221, 1)",
+        "rgba(88, 88, 107, 1)",
+        "rgba(26, 75, 102, 1)",
+        "rgba(51, 102, 131, 1)",
+        "rgba(102, 155, 188, 1)",
+        "rgba(255, 109, 0, 1)",
+        "rgba(255, 133, 0, 1)",
+        "rgba(255, 145, 0, 1)",
+        "rgba(255, 158, 0, 1)",
+        "rgba(119, 76, 96, 1)",
+        "rgba(135, 81, 99, 1)",
+        "rgba(151, 85, 101, 1)",
+        "rgba(183, 93, 105, 1)",
+        "rgba(209, 149, 150, 1)",
+        "rgba(234, 205, 194, 1)",
+        "rgba(255, 188, 66, 1)",
+        "rgba(236, 103, 78, 1)",
+        "rgba(126, 17, 209, 1)",
+        "rgba(0, 48, 133, 1)",
+        "rgba(110, 131, 88, 1)",
+        "rgba(143, 45, 86, 1)",
+        "rgba(60, 111, 65, 1)",
+        "rgba(67, 100, 65, 1)",
+        "rgba(83, 18, 83, 1)",
+        "rgba(93, 38, 95, 1)",
+        "rgba(103, 57, 106, 1)",
+        "rgba(122, 95, 128, 1)",
+        "rgba(120, 0, 0, 1)",
+        "rgba(153, 161, 131, 1)",
+        "rgba(223, 129, 122, 1)",
+    ];
+    constructor() {
+        // this.shuffleColors();
+    }
+
+    public getColors(num_colors: number): string[] {
+        if (num_colors > this.colorPallete.length) {
+            let times = Math.ceil(this.colorPallete.length / num_colors);
+            let color_array: string[] = [];
+            while (times--) {
+                color_array.concat(this.colorPallete);
+                this.shuffleColors();
+            }
+            return color_array.slice(0, num_colors);
+        }
+        return this.colorPallete.slice(0, num_colors);
+    }
+
+    private shuffleColors() {
+        for (var i = this.colorPallete.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var temp = this.colorPallete[i];
+            this.colorPallete[i] = this.colorPallete[j];
+            this.colorPallete[j] = temp;
+        }
     }
 }

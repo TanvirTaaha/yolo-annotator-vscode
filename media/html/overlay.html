@@ -19,6 +19,7 @@
             background: #1e1e1e;
             box-sizing: border-box;
             overflow: hidden;
+            transition: all 0.1s ease;
         }
 
         /* Native-like image container */
@@ -320,6 +321,12 @@
             font-weight: bold;
         }
 
+        .shortcut-help-text {
+            margin-top: 10px;
+            font-size: 8pt;
+            color: #777;
+        }
+
         #discardChanges {
             display: none;
         }
@@ -422,6 +429,7 @@
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+scroll</span>: Zoom in/out</div>
         <div class="shortcut-item"><span class="shortcut-key">Shift+Ctrl+scroll</span>: Fast zoom in/out</div>
         <div class="shortcut-item"><span class="shortcut-key">Drag handles</span>: Resize box</div>
+        <div class="shortcut-help-text"><span>Hide this menu in VSCode Settings</span></div>
     </div>
 
     <script nonce="${nonce}">
@@ -466,6 +474,7 @@
         let startPos = null;
         let currentPos = null;
         let classNames = ['person', 'car', 'bicycle']; // Default classes
+        let classColorNames = ['#44ff44']; // Default colors
         let popupTargetIndex = -1; // Index of label to be edited
         let popupIsShowing = false;
         let isDiscardChangesShown = false;
@@ -490,9 +499,9 @@
         const minZoom = 1.0;
         const maxZoom = 5.0;
         const zoomStep = 0.1;
-        const minFontSize = 10, maxFontSize = 48;
+        const minFontSize = 12, maxFontSize = 48;
         let mousePosBeforeZoom = { x: 0, y: 0 };
-
+        let dpr = 1;
 
 
         let imageelem = new Image();
@@ -581,19 +590,32 @@
             const width = label.w * canvas.width;
             const height = label.h * canvas.height;
             // Box
-            ctx.strokeStyle = isSelected ? '#ff4444' : '#44ff44';
+            ctx.strokeStyle = isSelected ? 'rgba(255, 68, 68, 0.9)' : classColorNames[label.classId].replace(', 1)', ', 0.9)');
             ctx.lineWidth = isSelected ? 3 : 2;
             ctx.strokeRect(x, y, width, height);
+            // Box fill
+            ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 0.3)' : classColorNames[label.classId].replace(', 1)', ', 0.3)');
+            ctx.fillRect(x, y, width, height);
+            // Corner dots
+            ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 1.0)' : classColorNames[label.classId].replace(', 1)', ', 1.0)');
+            // Top-left corner
+            drawDot(x, y, 5);
+            // Top-right corner
+            drawDot(x + width, y, 5);
+            // Bottom-left corner
+            drawDot(x, y + height, 5);
+            // Bottom-right corner
+            drawDot(x + width, y + height, 5);
 
             // Label background
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
 
-            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(12 * zoomLevel)));
-            ctx.font = `${fontSize}px Arial`;
+            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(14 * zoomLevel)));
+            ctx.font = `${fontSize}px 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif`;
 
             // Draw text background rect
-            ctx.fillStyle = isSelected ? '#ff4444' : '#44ff44';
+            ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId].replace(', 1)', ', 1)');
             const bgRectWidth = ctx.measureText(labelText).width + 8;
             const bgRectHeight = fontSize * 1.5;
             ctx.fillRect(x, (y - bgRectHeight), bgRectWidth, bgRectHeight);
@@ -601,6 +623,13 @@
             // Label text
             ctx.fillStyle = '#ffffff';
             ctx.fillText(labelText, x + 4, y - (fontSize * 0.4));
+        }
+
+        function drawDot(x, y, radius) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
         }
 
         function getHandles(x, y, width, height) {
@@ -875,7 +904,7 @@
                 draw();
             }, 50);
             // update labels
-            processLables(batchElem.labels, imageAndLabelBatchBuffer.classes);
+            processLables(batchElem.labels, imageAndLabelBatchBuffer.classes, imageAndLabelBatchBuffer.classColors);
         }
 
         function clearAroundCurrentImage() {
@@ -904,7 +933,6 @@
         function zoomIn(event, slow = false) {
             if (zoomLevel < maxZoom) {
                 zoomLevel = Math.min(maxZoom, zoomLevel + (slow ? zoomStep / 10 : zoomStep));
-                console.log(`Zooming in: ${zoomLevel}, slow: ${slow}, zoomLevel:${zoomLevel}`);
                 updateZoom(event);
             }
         }
@@ -912,7 +940,6 @@
         function zoomOut(event, slow = false) {
             if (zoomLevel > minZoom) {
                 zoomLevel = Math.max(minZoom, zoomLevel - (slow ? zoomStep / 10 : zoomStep));
-                console.log(`Zooming out: ${zoomLevel}, slow: ${slow}, zoomLevel:${zoomLevel}`);
                 updateZoom(event);
             }
         }
@@ -923,7 +950,9 @@
         }
 
         function updateZoom(event) {
-            mousePosBeforeZoom = getMousePosOnCanvasZoomed(event);
+            if (event) {
+                mousePosBeforeZoom = getMousePosOnCanvasZoomed(event);
+            }
             zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
             $("#zoomLevel").text(`${Math.round(zoomLevel * 100)}%`);
             $("#canvasContainer").css('overflow', (zoomLevel > 1) ? 'auto' : 'hidden');
@@ -938,8 +967,6 @@
                     left: mousePosBeforeZoom.x - mousePosOnCanvas.x,
                     top: mousePosBeforeZoom.y - mousePosOnCanvas.y
                 });
-                console.log(`scrollBy: left:${mousePosBeforeZoom.x - mousePosOnCanvas.x}, top:${mousePosBeforeZoom.y - mousePosOnCanvas.y}`);
-                console.log(`mousePosBeforeZoom, x:${mousePosBeforeZoom.x}, y:${mousePosBeforeZoom.y}, mousePosOnCanvas, x:${mousePosOnCanvas.x}, y;${mousePosOnCanvas.y}`);
                 mousePosBeforeZoom = mousePosOnCanvas;
             } else {
                 // Reset scroll to center
@@ -1061,7 +1088,7 @@
         var canvasClicked = false;
         // Canvas interaction
         window.addEventListener('mousedown', (e) => {
-            if (e.target !== canvas || isAnyActivityRunning()) return;
+            if (e.target.id === 'controlPanel') return;
             const pos = getMousePosOnCanvas(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
@@ -1141,6 +1168,7 @@
                     canvas.style.cursor = 'auto';
                 }
             }
+            console.log(`mouse position: mouseX:${mouseX}, mouseY:${mouseY}`);
         });
 
         window.addEventListener('mouseup', (e) => {
@@ -1195,7 +1223,6 @@
         window.addEventListener('wheel', (e) => {
             if (!e.ctrlKey) return;
             e.preventDefault();
-            console.log(`Zooming with wheel: deltaY=${e.deltaY}, shiftKey=${e.shiftKey}`);
             if (e.deltaY < 0) {
                 zoomIn(e, !e.shiftKey && Math.abs(e.deltaY) < 100);
             } else {
@@ -1203,9 +1230,10 @@
             }
         }, { passive: false });
 
-        function processLables(loadedLabels, loadedClasses) {
+        function processLables(loadedLabels, loadedClasses, loadedColors) {
             currentLabels = loadedLabels || [];
             classNames = loadedClasses || classNames;
+            classColorNames = loadedColors;
             selectedLabelIndex = -1;
             updateLabelsList();
             updateZoom();
@@ -1293,7 +1321,7 @@
                     break;
 
                 case 'labelsLoaded':
-                    processLables(message.labels, message.classes);
+                    processLables(message.labels, message.classes, message.classColors);
                     break;
 
                 case 'labelsSaved':
@@ -1331,7 +1359,7 @@
                     initializeDrawingStateVariables();
                     setTimeout(draw, 50);
                     // Process Labels
-                    processLables(message.labels, message.classes);
+                    processLables(message.labels, message.classes, message.classColors);
                     break;
 
                 case 'updateImageAndLabelBuffer':
@@ -1341,6 +1369,7 @@
                     }
                     imageAndLabelBatchBuffer.batch.set(message.batchElement.info.index, message.batchElement);
                     imageAndLabelBatchBuffer.classes = message.classes;
+                    imageAndLabelBatchBuffer.classColors = message.classColors;
                     break;
 
                 case 'updateImageAndLabelBufferEnd':
