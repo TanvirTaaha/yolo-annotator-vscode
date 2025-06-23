@@ -451,8 +451,8 @@
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
 
-            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(12 * zoomLevel)));
-            ctx.font = `${fontSize}px Arial`;
+            const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(14 * zoomLevel)));
+            ctx.font = `bold ${fontSize}px 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif`;
 
             // Draw text background rect
             ctx.fillStyle = isSelected ? '#ff4444' : '#44ff44';

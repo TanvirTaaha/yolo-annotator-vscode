@@ -499,7 +499,7 @@
         const minZoom = 1.0;
         const maxZoom = 5.0;
         const zoomStep = 0.1;
-        const minFontSize = 12, maxFontSize = 48;
+        const minFontSize = 14, maxFontSize = 18;
         let mousePosBeforeZoom = { x: 0, y: 0 };
         let dpr = 1;
 
@@ -606,23 +606,23 @@
             drawDot(x, y + height, 5);
             // Bottom-right corner
             drawDot(x + width, y + height, 5);
-
             // Label background
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
-
+            
             const fontSize = Math.max(minFontSize, Math.min(maxFontSize, Math.round(14 * zoomLevel)));
             ctx.font = `${fontSize}px 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif`;
-
+            
             // Draw text background rect
             ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId].replace(', 1)', ', 1)');
             const bgRectWidth = ctx.measureText(labelText).width + 8;
             const bgRectHeight = fontSize * 1.5;
-            ctx.fillRect(x, (y - bgRectHeight), bgRectWidth, bgRectHeight);
+            
+            ctx.fillRect(x, (y > bgRectHeight) ? (y - bgRectHeight) : y, bgRectWidth, bgRectHeight);
 
             // Label text
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(labelText, x + 4, y - (fontSize * 0.4));
+            ctx.fillText(labelText, x + 4, (y > bgRectHeight) ? y - (fontSize * 0.4) : y + bgRectHeight - (fontSize * 0.4));
         }
 
         function drawDot(x, y, radius) {
