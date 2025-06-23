@@ -10,6 +10,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private imagePreloader?: preloader.ImagePreloader;
     private classesPath = '';
     private classes = new Array<string>();
+    private stopWorking = false;
 
     constructor(private readonly context: vscode.ExtensionContext) { }
 
@@ -193,6 +194,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         if (buffer) {
 
             for (const batchElem of buffer.batch.values()) {
+                if (this.stopWorking) { return; }
                 webview.postMessage({
                     command: 'updateImageAndLabelBuffer',
                     batchElement: batchElem,
@@ -215,7 +217,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 vscode.window.showErrorMessage(`File not found: ${newDocumentPath}`);
                 return;
             }
-
+            this.stopWorking = true; // Stop any ongoing operations
             // Close the current editor panel
             webviewPanel.dispose();
 

@@ -14,8 +14,9 @@
         }
 
         #container {
-            width: 100%;
-            height: 100%;
+            margin: auto;
+            width: 400px;
+            height: 400px;
             position: relative;
             overflow: auto;
             background-color: #252526;
@@ -42,6 +43,16 @@
             padding: 6px 12px;
             font-size: 32px;
         }
+
+        .zoomLevel {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            display: flex;
+            z-index: 100;
+            padding: 4px;
+            background-color: wheat;
+        }
     </style>
 </head>
 
@@ -54,11 +65,14 @@
     <div class="button-group">
         <button id="zoomOutBtn">Zoom -</button>
         <button id="zoomInBtn">Zoom +</button>
+        <button id="play">Play</button>
     </div>
+    <div class="zoomLevel"></div>
     <script>
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext('2d');
-
+        const container = document.getElementById('container');
+        let mousePosBeforeZoom = { x: 0, y: 0 };
         let zoomLevel = 1.0;
 
         function draw() {
@@ -78,6 +92,7 @@
             ctx.drawImage(imageelem, 0, 0, imageelem.naturalWidth, imageelem.naturalHeight);
             // console.log(`canvas.width:${canvas.width}, canvas.height:${canvas.height}`);
             // console.log(`canvas.syle.width:${canvas.syle.width}, canvas.syle.height:${canvas.syle.height}`);
+            $(".zoomLevel").text(`Zoom Level: ${zoomLevel.toFixed(2)}`);
         }
 
         imageelem = new Image();
@@ -97,6 +112,111 @@
 
         window.addEventListener('resize', () => setTimeout(draw, 50));
 
+        window.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            console.log(`Zooming with wheel: deltaY=${e.deltaY}, shiftKey=${e.shiftKey}`);
+
+            if (e.deltaY < 0) {
+                zoomLevel += 0.1;
+            } else {
+                zoomLevel -= 0.1;
+            }
+            mousePosBeforeZoom = getMousePosOnCanvasZoomed(e);
+            draw();
+            updateScroll(e);
+        }, { passive: false });
+
+        // function updateScroll(event) {
+        //     console.log(`Updating scroll position: event:${event}`);
+        //     if (event) {
+        //         const pos = getMousePosOnCanvas(canvas, event);
+        //         container.scroll({
+        //             left: canvas.width / 2 * (zoomLevel - 1),
+        //             top: canvas.height / 2 * (zoomLevel - 1)
+        //         });
+        //         console.log(`Scoll left: ${pos.x * (zoomLevel - 1)}, top: ${pos.y * (zoomLevel - 1)}`);
+        //     } else {
+        //         // Reset scroll to center
+        //         container.scroll({
+        //             left: canvas.width / 2 * (zoomLevel - 1),
+        //             top: canvas.height / 2 * (zoomLevel - 1)
+        //         });
+        //         console.log(`Scoll left: ${canvas.width / 2 * (zoomLevel - 1)}, top: ${canvas.height / 2 * (zoomLevel - 1)}`);
+        //     }
+        // }
+        function getScrollByCoords(event) {
+            const containerRect = container.getBoundingClientRect();
+            const mouseX = event.clientX - containerRect.left;
+            const mouseY = event.clientY - containerRect.top;
+            const left = Math.max(0, mouseX * zoomLevel - mouseX);
+            const top = Math.max(0, mouseY * zoomLevel - mouseY);
+            // console.log(`scroll by: left:${left}, top:${top}`)
+            return { left: left, top: top };
+        }
+
+        function updateScroll(event) {
+
+            if (event) {
+                const mousePosOnCanvas = getMousePosOnCanvasZoomed(event);
+                container.scrollBy({
+                    left: mousePosBeforeZoom.x - mousePosOnCanvas.x,
+                    top: mousePosBeforeZoom.y - mousePosOnCanvas.y
+                });
+                console.log(`scrollBy: left:${mousePosBeforeZoom.x - mousePosOnCanvas.x}, top:${mousePosBeforeZoom.y - mousePosOnCanvas.y}`);
+                console.log(`mousePosBeforeZoom, x:${mousePosBeforeZoom.x}, y:${mousePosBeforeZoom.y}, mousePosOnCanvas, x:${mousePosOnCanvas.x}, y;${mousePosOnCanvas.y}`);
+                mousePosBeforeZoom = mousePosOnCanvas;
+                console.log(`updateScroll mouse pos on canvas x:${getMousePosOnCanvas(event).x}, y:${getMousePosOnCanvas(event).y}`);
+            } else {
+                // Reset scroll to center
+                console.error("No event provided, resetting scroll to center");
+            }
+            console.log(`container left:${canvas.getBoundingClientRect().left}, top:${canvas.getBoundingClientRect().top}`);
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            // mousePosBeforeZoom = getMousePosOnCanvasZoomed(e);
+            const scrollByPos = getScrollByCoords(e);
+            console.log(`mouseX:${scrollByPos.left} mouseY:${scrollByPos.top}`)
+            console.log(`container left:${canvas.getBoundingClientRect().left}, top:${canvas.getBoundingClientRect().top}`);
+            console.log(`mouse pos on canvas x:${getMousePosOnCanvas(e).x}, y:${getMousePosOnCanvas(e).y}`);
+        });
+
+        document.addEventListener('scroll', () => {
+            console.log(`container left:${canvas.getBoundingClientRect().left}, top:${canvas.getBoundingClientRect().top}`);
+        });
+
+        function getMousePosOnCanvas(event) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
+
+            return {
+                x: Math.max(0, Math.min(canvas.width, (event.clientX - canvasRect.left) * scaleX)),
+                y: Math.max(0, Math.min(canvas.height, (event.clientY - canvasRect.top) * scaleY))
+            };
+        }
+
+        function getMousePosOnCanvasZoomed(event) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
+
+            return {
+                x: Math.max(0, Math.min(canvas.width * zoomLevel, (event.clientX - canvasRect.left) * scaleX * zoomLevel)),
+                y: Math.max(0, Math.min(canvas.height * zoomLevel, (event.clientY - canvasRect.top) * scaleY * zoomLevel))
+            };
+        }
+
+        $("#play").click(() => {
+            console.log("Play clicked");
+            container.scrollBy({
+                left: 200,
+                top: 100,
+                behavior: 'smooth'
+            });
+            // canvas.scroll()
+        });
     </script>
 </body>
 

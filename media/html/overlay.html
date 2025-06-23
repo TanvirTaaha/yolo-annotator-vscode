@@ -80,6 +80,7 @@
             display: none;
             margin: 0;
             padding: 0;
+            user-select: none;
         }
 
         .control-panel.collapsed .panel-header {
@@ -95,6 +96,7 @@
             margin-bottom: 10px;
             border-bottom: 1px solid #444;
             padding-bottom: 5px;
+            user-select: none;
         }
 
         .panel-title {
@@ -114,7 +116,7 @@
         .reload-btn:hover {
             border-color: #007acc;
         }
-        
+
         .collapse-btn {
             background: none;
             border: 2px solid transparent;
@@ -130,6 +132,7 @@
 
         .control-section {
             margin-bottom: 12px;
+            user-select: none;
         }
 
         .control-section h4 {
@@ -189,6 +192,7 @@
             color: #bbbbbb;
             text-align: center;
             flex: 1;
+            user-select: all;
         }
 
         /* Zooming controls */
@@ -212,6 +216,11 @@
             max-height: 200px;
             overflow-y: auto;
             margin-top: 8px;
+        }
+
+        .labels-class,
+        .label-coords {
+            user-select: all;
         }
 
         .label-item {
@@ -410,6 +419,8 @@
         <div class="shortcut-item"><span class="shortcut-key">←/→</span>: Navigate</div>
         <div class="shortcut-item"><span class="shortcut-key">Del</span>: Delete selected</div>
         <div class="shortcut-item"><span class="shortcut-key">Esc</span>: Cancel drawing</div>
+        <div class="shortcut-item"><span class="shortcut-key">Ctrl+scroll</span>: Zoom in/out</div>
+        <div class="shortcut-item"><span class="shortcut-key">Shift+Ctrl+scroll</span>: Fast zoom in/out</div>
         <div class="shortcut-item"><span class="shortcut-key">Drag handles</span>: Resize box</div>
     </div>
 
@@ -480,6 +491,8 @@
         const maxZoom = 5.0;
         const zoomStep = 0.1;
         const minFontSize = 10, maxFontSize = 48;
+        let mousePosBeforeZoom = { x: 0, y: 0 };
+
 
 
         let imageelem = new Image();
@@ -888,34 +901,58 @@
             isDrawing || isInMoveBoxMode || isResizing;
         }
 
-        function zoomIn() {
+        function zoomIn(event, slow = false) {
             if (zoomLevel < maxZoom) {
-                zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
-                updateZoom();
+                zoomLevel = Math.min(maxZoom, zoomLevel + (slow ? zoomStep / 10 : zoomStep));
+                console.log(`Zooming in: ${zoomLevel}, slow: ${slow}, zoomLevel:${zoomLevel}`);
+                updateZoom(event);
             }
         }
 
-        function zoomOut() {
+        function zoomOut(event, slow = false) {
             if (zoomLevel > minZoom) {
-                zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
-                updateZoom();
+                zoomLevel = Math.max(minZoom, zoomLevel - (slow ? zoomStep / 10 : zoomStep));
+                console.log(`Zooming out: ${zoomLevel}, slow: ${slow}, zoomLevel:${zoomLevel}`);
+                updateZoom(event);
             }
         }
 
-        function resetZoom() {
+        function resetZoom(event) {
             zoomLevel = 1.0;
-            updateZoom();
+            updateZoom(event);
         }
 
-        function updateZoom() {
+        function updateZoom(event) {
+            mousePosBeforeZoom = getMousePosOnCanvasZoomed(event);
             zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
             $("#zoomLevel").text(`${Math.round(zoomLevel * 100)}%`);
             $("#canvasContainer").css('overflow', (zoomLevel > 1) ? 'auto' : 'hidden');
             draw();
+            updateScroll(event);
+        }
+
+        function updateScroll(event) {
+            if (event) {
+                const mousePosOnCanvas = getMousePosOnCanvasZoomed(event);
+                canvasContainer.scrollBy({
+                    left: mousePosBeforeZoom.x - mousePosOnCanvas.x,
+                    top: mousePosBeforeZoom.y - mousePosOnCanvas.y
+                });
+                console.log(`scrollBy: left:${mousePosBeforeZoom.x - mousePosOnCanvas.x}, top:${mousePosBeforeZoom.y - mousePosOnCanvas.y}`);
+                console.log(`mousePosBeforeZoom, x:${mousePosBeforeZoom.x}, y:${mousePosBeforeZoom.y}, mousePosOnCanvas, x:${mousePosOnCanvas.x}, y;${mousePosOnCanvas.y}`);
+                mousePosBeforeZoom = mousePosOnCanvas;
+            } else {
+                // Reset scroll to center
+                canvasContainer.scroll({
+                    left: canvas.width / 2 * (zoomLevel - 1),
+                    top: canvas.height / 2 * (zoomLevel - 1),
+                    behavior: "smooth"
+                });
+            }
         }
 
         // Update mouse coordinate calculations
-        function getMousePosOnCanvas(canvas, event) {
+        function getMousePosOnCanvas(event) {
             const canvasRect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / canvasRect.width;
             const scaleY = canvas.height / canvasRect.height;
@@ -923,6 +960,17 @@
             return {
                 x: Math.max(0, Math.min(canvas.width, (event.clientX - canvasRect.left) * scaleX)),
                 y: Math.max(0, Math.min(canvas.height, (event.clientY - canvasRect.top) * scaleY))
+            };
+        }
+
+        function getMousePosOnCanvasZoomed(event) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
+
+            return {
+                x: Math.max(0, Math.min(canvas.width * zoomLevel, (event.clientX - canvasRect.left) * scaleX * zoomLevel)),
+                y: Math.max(0, Math.min(canvas.height * zoomLevel, (event.clientY - canvasRect.top) * scaleY * zoomLevel))
             };
         }
 
@@ -1013,7 +1061,8 @@
         var canvasClicked = false;
         // Canvas interaction
         window.addEventListener('mousedown', (e) => {
-            const pos = getMousePosOnCanvas(canvas, e);
+            if (e.target !== canvas || isAnyActivityRunning()) return;
+            const pos = getMousePosOnCanvas(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
@@ -1064,7 +1113,7 @@
         });
 
         window.addEventListener('mousemove', (e) => {
-            const pos = getMousePosOnCanvas(canvas, e);
+            const pos = getMousePosOnCanvas(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
@@ -1146,10 +1195,11 @@
         window.addEventListener('wheel', (e) => {
             if (!e.ctrlKey) return;
             e.preventDefault();
+            console.log(`Zooming with wheel: deltaY=${e.deltaY}, shiftKey=${e.shiftKey}`);
             if (e.deltaY < 0) {
-                zoomIn();
+                zoomIn(e, !e.shiftKey && Math.abs(e.deltaY) < 100);
             } else {
-                zoomOut();
+                zoomOut(e, !e.shiftKey && Math.abs(e.deltaY) < 100);
             }
         }, { passive: false });
 
@@ -1201,11 +1251,19 @@
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
-                    prevBtn.click();
+                    if (isDiscardChangesShown) {
+                        showStatus('Unsaved changes', true);
+                    } else {
+                        prevBtn.click();
+                    }
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    nextBtn.click();
+                    if (isDiscardChangesShown) {
+                        showStatus('Unsaved changes', true);
+                    } else {
+                        nextBtn.click();
+                    }
                     break;
                 case 'Delete':
                     if (selectedLabelIndex !== -1) {
