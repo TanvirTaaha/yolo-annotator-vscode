@@ -607,6 +607,14 @@
             drawDot(x, y + height, 5);
             // Bottom-right corner
             drawDot(x + width, y + height, 5);
+
+            writeClassName(label, isSelected, index);
+        }
+
+        function writeClassName(label, isSelected, index) {
+            const x = (label.cx - label.w / 2) * canvas.width;
+            const y = (label.cy - label.h / 2) * canvas.height;
+            
             // Label background
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, width=device-width, height=device-height, shrink-to-fit=no">
     <script nonce="thisisnonce" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <title>YOLO Image Annotator</title>
     <style>
@@ -47,11 +47,12 @@
             z-index: 100;
             margin: auto;
             box-sizing: border-box;
+            user-select: none;
+            touch-action: pan-x pan-y;
         }
 
         .canvas-container .label-class-name {
             position: absolute;
-            user-select: none;
             z-index: 100;
             padding: 4px;
         }
@@ -434,6 +435,13 @@
             {
                 classId: 0,
                 cx: 320 / 1200,
+                cy: 40 / 800,
+                w: 80 / 1200,
+                h: 80 / 800,
+            },
+            {
+                classId: 0,
+                cx: 320 / 1200,
                 cy: 320 / 800,
                 w: 460 / 1200,
                 h: 460 / 800,
@@ -577,16 +585,15 @@
                 // const x = label.cx * newWidth;
                 // const y = label.cy * newHeight; 
                 const fontSize = 12;
-                const bgRectWidth = ctx.measureText(labelText).width + 8;
-                const bgRectHeight = fontSize * 1.5;
 
 
                 const classNameDiv = document.createElement('span');
                 classNameDiv.className = 'label-class-name';
                 classNameDiv.textContent = labelText;
                 classNameDiv.style.fontSize = `${fontSize}px`;
-                classNameDiv.style.left = `${x + 4}px`;
-                classNameDiv.style.top = `${((y > bgRectHeight) ? y - (fontSize * 0.4) : y + bgRectHeight - (fontSize * 0.4)) - 8}px`;
+                classNameDiv.style.left = `${x}px`;
+                const rect = classNameDiv.getBoundingClientRect();
+                classNameDiv.style.top = `${((y > rect.height) ? y - (fontSize * 2) : y + rect.height - (fontSize))}px`;
                 // classNameDiv.style.left = `${x}px`;
                 // classNameDiv.style.top = `${y}px`;
                 classNameDiv.style.backgroundColor = (index === selectedLabelIndex) ? '#ff4444' : '#44ff44';
@@ -653,6 +660,7 @@
             console.log(`image src set`);
         }
         resizeCanvasToFitScreen();
+        document.addEventListener('touchmove', event => event.scale !== 1 && event.preventDefault(), { passive: false });
     </script>
 </body>
 
