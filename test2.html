@@ -42,6 +42,20 @@
             image-rendering: crisp-edges;
         }
 
+        .canvas-container #canvasLabelClassContainer {
+            position: absolute;
+            z-index: 100;
+            margin: auto;
+            box-sizing: border-box;
+        }
+
+        .canvas-container .label-class-name {
+            position: absolute;
+            user-select: none;
+            z-index: 100;
+            padding: 4px;
+        }
+
         /* Floating control panel */
         .control-panel {
             position: fixed;
@@ -314,6 +328,7 @@
 <body>
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
+        <div id="canvasLabelClassContainer"></div>
     </div>
     <!-- Floating Control Panel -->
     <div class="control-panel" id="controlPanel">
@@ -398,6 +413,10 @@
         const canvas = document.getElementById("annotationCanvas");
         const canvasContainer = document.getElementById("canvasContainer");
         const ctx = canvas.getContext('2d');
+        const labelsList = document.getElementById('labelsList');
+        const labelCount = document.getElementById('labelCount');
+        const canvasLabelClassContainer = document.getElementById('canvasLabelClassContainer');
+
 
         const minFontSize = 10, maxFontSize = 48;
 
@@ -411,7 +430,7 @@
 
         const classNames = ['Truck', 'LP'];
         let selectedLabelIndex = -1;
-        const labels = [
+        const currentLabels = [
             {
                 classId: 0,
                 cx: 320 / 1200,
@@ -455,14 +474,14 @@
             ctx.font = `bold ${fontSize}px 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif`;
 
             // Draw text background rect
-            ctx.fillStyle = isSelected ? '#ff4444' : '#44ff44';
-            const bgRectWidth = ctx.measureText(labelText).width + 8;
-            const bgRectHeight = fontSize * 1.5;
-            ctx.fillRect(x, (y - bgRectHeight), bgRectWidth, bgRectHeight);
+            // ctx.fillStyle = isSelected ? '#ff4444' : '#44ff44';
+            // const bgRectWidth = ctx.measureText(labelText).width + 8;
+            // const bgRectHeight = fontSize * 1.5;
+            // ctx.fillRect(x, (y - bgRectHeight), bgRectWidth, bgRectHeight);
 
             // Label text
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(labelText, x + 4, y - (fontSize * 0.4));
+            // ctx.fillStyle = '#ffffff';
+            // ctx.fillText(labelText, x + 4, y - (fontSize * 0.4));
         }
 
         function draw() {
@@ -484,12 +503,53 @@
             console.log(`imageRatio:${imageRatio}, containerRatio:${containerRatio}, newWidth:${newWidth}, newHeight:${newHeight}`);
             canvas.width = imageelem.naturalWidth;
             canvas.height = imageelem.naturalHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.drawImage(imageelem, 0, 0, imageelem.naturalWidth, imageelem.naturalHeight);
 
-            labels.forEach((label, index) => {
+            // const canvasRect = canvas.getClientRects();
+            const canvasStyle = canvas.getBoundingClientRect();
+            console.log(`canvasStyle:${canvasStyle.left}`);
+            canvasLabelClassContainer.style.position = 'fixed';
+            canvasLabelClassContainer.style.left = `500px`;
+            canvasLabelClassContainer.style.top = `4px`;
+            console.log(`canvasStyle.left:${canvasStyle.left}px`);
+            console.log(`canvasStyle.top:${canvasStyle.top}px`);
+            labelsList.innerHTML = '';
+            canvasLabelClassContainer.innerHTML = '';
+            currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
                 drawBoundingBox(label, isSelected, index);
+                labelCount.textContent = currentLabels.length;
+                const div = document.createElement('div');
+                div.className = 'label-item' + (index === selectedLabelIndex ? ' selected' : '');
+
+                const className = classNames[label.classId] || `Class ${label.classId}`;
+                div.innerHTML = `
+                    <div>
+                        <div class="label-class">${className}</div>
+                        <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}</div>
+                    </div>
+                    <button id="labelEntryDeleteBtn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
+                `;
+
+                div.getElementsByClassName('label-class')[0].addEventListener('click', (e) => {
+                    showPopup(index);
+                });
+
+                div.getElementsByTagName("button")[0].addEventListener('click', (e) => {
+                    deleteLabel(index);
+                });
+
+                div.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'BUTTON') {
+                        clicked = true;
+                        unSelectLabel();
+                        selectLabel(index);
+                    }
+                });
+
+                labelsList.appendChild(div);
             });
 
             const canvasLeft = Math.max(0, (containerRect.width - newWidth) / 2);
@@ -501,6 +561,49 @@
                 width: newWidth,
                 height: newHeight
             });
+
+            canvasLabelClassContainer.style.position = 'absolute';
+            canvasLabelClassContainer.style.margin = 'auto';
+            canvasLabelClassContainer.style.left = `${canvasLeft}px`;
+            canvasLabelClassContainer.style.top = `${canvasTop}px`;
+            canvasLabelClassContainer.style.width = `${newWidth}px`;
+            canvasLabelClassContainer.style.height = `${newHeight}px`;
+            // const canvasStyleRatio = newWidth / canvas.width; 
+            currentLabels.forEach((label, index) => {
+                const className = classNames[label.classId] || `Class ${label.classId}`;
+                const labelText = `${className} (${index + 1})`;
+                const x = (label.cx - label.w / 2) * newWidth;
+                const y = (label.cy - label.h / 2) * newHeight;
+                // const x = label.cx * newWidth;
+                // const y = label.cy * newHeight; 
+                const fontSize = 12;
+                const bgRectWidth = ctx.measureText(labelText).width + 8;
+                const bgRectHeight = fontSize * 1.5;
+
+
+                const classNameDiv = document.createElement('span');
+                classNameDiv.className = 'label-class-name';
+                classNameDiv.textContent = labelText;
+                classNameDiv.style.fontSize = `${fontSize}px`;
+                classNameDiv.style.left = `${x + 4}px`;
+                classNameDiv.style.top = `${((y > bgRectHeight) ? y - (fontSize * 0.4) : y + bgRectHeight - (fontSize * 0.4)) - 8}px`;
+                // classNameDiv.style.left = `${x}px`;
+                // classNameDiv.style.top = `${y}px`;
+                classNameDiv.style.backgroundColor = (index === selectedLabelIndex) ? '#ff4444' : '#44ff44';
+                canvasLabelClassContainer.appendChild(classNameDiv);
+
+            });
+        }
+
+        function selectLabel(index) {
+            if (index < 0 || index >= currentLabels.length) return;
+            selectedLabelIndex = index;
+            draw();
+        }
+
+        function unSelectLabel() {
+            selectedLabelIndex = -1;
+            draw();
         }
 
         $("#zoomInBtn").click((e) => {
