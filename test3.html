@@ -1,105 +1,350 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>Translucent Rectangle with Dotted Corners</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Bounding Box Demo</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f0f0;
+            padding: 20px;
+            background: #1e1e1e;
+            font-family: Arial, sans-serif;
         }
 
-        canvas {
-            border: 1px solid #ccc;
+        .container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: #252526;
+            border: 1px solid #444;
+            margin: 20px auto;
+        }
+
+        /* Bounding box styles */
+        .bounding-box {
+            position: absolute;
+            border: 2px solid;
+            box-sizing: border-box;
+            pointer-events: none;
+            background-color: transparent;
+        }
+
+        .bounding-box.default {
+            border-color: rgba(68, 255, 68, 0.9);
+            background-color: rgba(68, 255, 68, 0.1);
+        }
+
+        .bounding-box.selected {
+            border-color: rgba(255, 68, 68, 0.9);
+            background-color: rgba(255, 68, 68, 0.2);
+            border-width: 3px;
+        }
+
+        .bounding-box.class-0 {
+            border-color: rgba(255, 0, 0, 0.9);
+            background-color: rgba(255, 0, 0, 0.1);
+        }
+
+        .bounding-box.class-1 {
+            border-color: rgba(0, 255, 0, 0.9);
+            background-color: rgba(0, 255, 0, 0.1);
+        }
+
+        .bounding-box.class-2 {
+            border-color: rgba(0, 0, 255, 0.9);
+            background-color: rgba(0, 0, 255, 0.1);
+        }
+
+        /* Dot styles */
+        .dot {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+
+        .dot.default {
+            background-color: rgba(68, 255, 68, 1.0);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .dot.selected {
+            background-color: rgba(255, 68, 68, 1.0);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .dot.class-0 {
+            background-color: rgba(255, 0, 0, 1.0);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .dot.class-1 {
+            background-color: rgba(0, 255, 0, 1.0);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .dot.class-2 {
+            background-color: rgba(0, 0, 255, 1.0);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        /* Label styles */
+        .label-text {
+            position: absolute;
+            padding: 4px 8px;
+            font-size: 14px;
+            font-family: 'Work Sans', 'Trebuchet MS', 'Lucida Grande', sans-serif;
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .label-text.default {
+            background-color: rgba(68, 255, 68, 1.0);
+        }
+
+        .label-text.selected {
+            background-color: rgba(255, 68, 68, 1.0);
+        }
+
+        .label-text.class-0 {
+            background-color: rgba(255, 0, 0, 1.0);
+        }
+
+        .label-text.class-1 {
+            background-color: rgba(0, 255, 0, 1.0);
+        }
+
+        .label-text.class-2 {
+            background-color: rgba(0, 0, 255, 1.0);
+        }
+
+        /* Controls */
+        .controls {
+            text-align: center;
+            margin: 20px;
+        }
+
+        .controls button {
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .controls button:hover {
+            background: #005a99;
+        }
+
+        .demo-info {
+            color: #cccccc;
+            text-align: center;
+            margin: 20px;
         }
     </style>
 </head>
-
 <body>
+    <div class="demo-info">
+        <h2 style="color: #00aeff;">CSS Bounding Box & Dots Demo</h2>
+        <p>Click buttons to generate dynamic bounding boxes and corner dots</p>
+    </div>
 
-    <canvas id="myCanvas" width="600" height="400"></canvas>
+    <div class="container" id="container"></div>
+
+    <div class="controls">
+        <button onclick="drawRandomBox()">Add Random Box</button>
+        <button onclick="drawSelectedBox()">Add Selected Box</button>
+        <button onclick="drawClassBox(0)">Add Red Box</button>
+        <button onclick="drawClassBox(1)">Add Green Box</button>
+        <button onclick="drawClassBox(2)">Add Blue Box</button>
+        <button onclick="clearAll()">Clear All</button>
+        <button onclick="drawDemoBoxes()">Demo Layout</button>
+    </div>
 
     <script>
-        const canvas = document.getElementById('myCanvas');
-        const ctx = canvas.getContext('2d');
+        let boxCounter = 0;
 
-        // Rectangle properties
-        const rectX = 100;
-        const rectY = 80;
-        const rectWidth = 400;
-        const rectHeight = 250;
-        const baseColor = 'rgba(0, 128, 255, 1)'; // Solid blue for reference
-
-        // --- Draw the Rectangle ---
-
-        // Set the fill color with translucency (alpha value 0.3 for 30% opacity)
-        ctx.fillStyle = baseColor.replace(', 1)', ', 0.3)'); // Change alpha to 0.3
-        ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
-
-        // Set the stroke color for a minimal border (same color, almost solid)
-        ctx.strokeStyle = baseColor.replace(', 1)', ', 0.9)'); // Almost solid for minimal border effect
-        ctx.lineWidth = 1; // Very minimal border width
-        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-
-        // --- Draw the Dotted Corner Points ---
-
-        const dotRadius = 5; // Size of the corner dots
-        const dotColor = baseColor.replace(', 1)', ', 0.8)'); // Slightly less translucent than fill
-
-        // Function to draw a single dot
-        function drawDot(x, y) {
-            ctx.beginPath();
-            ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
-            ctx.fillStyle = dotColor;
-            ctx.fill();
-            ctx.closePath();
+        // Function to draw a bounding box with CSS styling
+        function drawBoundingBox(container, x, y, width, height, classType = 'default', isSelected = false, id = null) {
+            const boxId = id || `box-${boxCounter++}`;
+            
+            // Remove existing box if updating
+            $(`#${boxId}`).remove();
+            
+            // Create bounding box element
+            const boundingBox = $('<div>')
+                .addClass('bounding-box')
+                .addClass(isSelected ? 'selected' : classType)
+                .attr('id', boxId)
+                .css({
+                    left: `${x}px`,
+                    top: `${y}px`,
+                    width: `${width}px`,
+                    height: `${height}px`
+                });
+            
+            $(container).append(boundingBox);
+            return boxId;
         }
 
-        // Top-left corner
-        drawDot(rectX, rectY);
-        // Top-right corner
-        drawDot(rectX + rectWidth, rectY);
-        // Bottom-left corner
-        drawDot(rectX, rectY + rectHeight);
-        // Bottom-right corner
-        drawDot(rectX + rectWidth, rectY + rectHeight);
+        // Function to draw dots at specific coordinates with specific radius
+        function drawDot(container, x, y, radius = 5, classType = 'default', isSelected = false, id = null) {
+            const dotId = id || `dot-${Date.now()}-${Math.random()}`;
+            
+            // Remove existing dot if updating
+            $(`#${dotId}`).remove();
+            
+            // Create dot element
+            const dot = $('<div>')
+                .addClass('dot')
+                .addClass(isSelected ? 'selected' : classType)
+                .attr('id', dotId)
+                .css({
+                    left: `${x}px`,
+                    top: `${y}px`,
+                    width: `${radius * 2}px`,
+                    height: `${radius * 2}px`
+                });
+            
+            $(container).append(dot);
+            return dotId;
+        }
 
-        // Add a small label for clarity (optional)
-        ctx.fillStyle = getInverseTextColor(baseColor);
-        ctx.font = `14px Poppins, 'Luckiest Guy', 'NCL Neovibes', 'Cocogoose Narrows', sans-serif`;
-        ctx.fillText('Translucent Rectangle with Dotted Corners', rectX+15, rectY + 45);
-        // ctx.strokeStyle = '#000000';
-        // ctx.strokeText('Translucent Rectangle with Dotted Corners', rectX, rectY - 15);
+        // Function to draw corner dots for a bounding box
+        function drawCornerDots(container, x, y, width, height, radius = 5, classType = 'default', isSelected = false, boxId = null) {
+            const baseId = boxId || `corners-${boxCounter}`;
+            
+            // Draw dots at all four corners
+            drawDot(container, x, y, radius, classType, isSelected, `${baseId}-tl`); // Top-left
+            drawDot(container, x + width, y, radius, classType, isSelected, `${baseId}-tr`); // Top-right
+            drawDot(container, x, y + height, radius, classType, isSelected, `${baseId}-bl`); // Bottom-left
+            drawDot(container, x + width, y + height, radius, classType, isSelected, `${baseId}-br`); // Bottom-right
+        }
 
-        function getInverseTextColor(backgroundColor) {
-            // Remove the hash (#) symbol if it's there
-            if (backgroundColor.startsWith('#')) {
-                backgroundColor = backgroundColor.slice(1);
+        // Function to draw a complete bounding box with label and corner dots
+        function drawCompleteBoundingBox(container, x, y, width, height, label = '', classType = 'default', isSelected = false) {
+            const boxId = `complete-box-${boxCounter}`;
+            const fontSize = 14;
+            
+            // Draw the main bounding box
+            drawBoundingBox(container, x, y, width, height, classType, isSelected, boxId);
+            
+            // Draw corner dots
+            drawCornerDots(container, x, y, width, height, 5, classType, isSelected, boxId);
+            
+            // Draw label if provided
+            if (label) {
+                drawLabel(container, x, y, label, fontSize, classType, isSelected, `${boxId}-label`);
             }
-
-            // Parse the hex color to get the red, green, and blue values
-            const r = parseInt(backgroundColor.substring(0, 2), 16);
-            const g = parseInt(backgroundColor.substring(2, 4), 16);
-            const b = parseInt(backgroundColor.substring(4, 6), 16);
-
-            // Calculate the brightness using the formula for luminance
-            const brightness = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-            // If the brightness is greater than a threshold, return black text; else, white text
-            return brightness > 128 ? '#000000' : '#FFFFFF';
+            
+            boxCounter++;
+            return boxId;
         }
 
-        // Example usage
-        const backgroundColor = '#ff6d00';  // Orange color
-        const textColor = getInverseTextColor(backgroundColor);
-        console.log(textColor);  // Outputs: #000000 (Black)
+        // Function to draw a text label
+        function drawLabel(container, x, y, text, fontSize = 14, classType = 'default', isSelected = false, id = null) {
+            const labelId = id || `label-${Date.now()}`;
+            
+            // Remove existing label if updating
+            $(`#${labelId}`).remove();
+            
+            // Create label element
+            const label = $('<div>')
+                .addClass('label-text')
+                .addClass(isSelected ? 'selected' : classType)
+                .attr('id', labelId)
+                .text(text)
+                .css({
+                    'font-size': `${fontSize}px`
+                });
+            
+            // Add to container first to calculate dimensions
+            $(container).append(label);
+            
+            // Get dimensions for positioning
+            const rect = label.get(0).getBoundingClientRect();
+            const labelHeight = rect.height;
+            
+            // Position label above the box if there's space, otherwise below
+            const labelY = y > labelHeight + 5 ? y - labelHeight - 2 : y + labelHeight;
+            
+            label.css({
+                left: `${x}px`,
+                top: `${labelY}px`
+            });
+            
+            return labelId;
+        }
+
+        // Demo functions
+        function drawRandomBox() {
+            const container = '#container';
+            const x = Math.random() * 600;
+            const y = Math.random() * 400;
+            const width = 80 + Math.random() * 120;
+            const height = 60 + Math.random() * 100;
+            const classes = ['default', 'class-0', 'class-1', 'class-2'];
+            const classType = classes[Math.floor(Math.random() * classes.length)];
+            const label = `Box ${boxCounter + 1}`;
+            
+            drawCompleteBoundingBox(container, x, y, width, height, label, classType, false);
+        }
+
+        function drawSelectedBox() {
+            const container = '#container';
+            const x = Math.random() * 600;
+            const y = Math.random() * 400;
+            const width = 100 + Math.random() * 100;
+            const height = 80 + Math.random() * 80;
+            const label = `Selected ${boxCounter + 1}`;
+            
+            drawCompleteBoundingBox(container, x, y, width, height, label, 'default', true);
+        }
+
+        function drawClassBox(classIndex) {
+            const container = '#container';
+            const x = Math.random() * 600;
+            const y = Math.random() * 400;
+            const width = 90 + Math.random() * 90;
+            const height = 70 + Math.random() * 70;
+            const classType = `class-${classIndex}`;
+            const classNames = ['Red', 'Green', 'Blue'];
+            const label = `${classNames[classIndex]} ${boxCounter + 1}`;
+            
+            drawCompleteBoundingBox(container, x, y, width, height, label, classType, false);
+        }
+
+        function clearAll() {
+            $('#container').empty();
+            boxCounter = 0;
+        }
+
+        function drawDemoBoxes() {
+            clearAll();
+            
+            // Draw a variety of boxes to show different styles
+            drawCompleteBoundingBox('#container', 50, 50, 150, 100, 'Person (1)', 'class-0', false);
+            drawCompleteBoundingBox('#container', 250, 80, 120, 80, 'Car (2)', 'class-1', false);
+            drawCompleteBoundingBox('#container', 400, 120, 180, 120, 'Selected Box', 'class-2', true);
+            drawCompleteBoundingBox('#container', 100, 250, 200, 90, 'Default Box', 'default', false);
+            
+            // Draw some standalone dots for demonstration
+            drawDot('#container', 600, 100, 8, 'class-0', false);
+            drawDot('#container', 650, 150, 6, 'class-1', false);
+            drawDot('#container', 700, 200, 10, 'selected', true);
+        }
+
+        // Initialize with demo layout
+        $(document).ready(function() {
+            drawDemoBoxes();
+        });
     </script>
-
 </body>
-
 </html>

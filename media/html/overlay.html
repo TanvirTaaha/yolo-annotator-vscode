@@ -48,6 +48,20 @@
             image-rendering: crisp-edges;
         }
 
+        .canvas-container #canvasLabelClassContainer {
+            position: absolute;
+            z-index: 100;
+            margin: auto;
+            user-select: none;
+        }
+
+        .canvas-container .label-class-name {
+            position: absolute;
+            z-index: 100;
+            padding: 4px;
+            font-family: 'Work Sans', 'Trebuchet MS', 'Lucida Grande', 'sans-serif';
+        }
+
         /* Floating control panel */
         .control-panel {
             position: fixed;
@@ -349,6 +363,7 @@
 <body>
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
+        <div id="canvasLabelClassContainer"></div>
     </div>
 
     <!-- Floating Control Panel -->
@@ -443,6 +458,7 @@
         const collapseBtn = document.getElementById('collapseBtn');
         const statusIndicator = document.getElementById('statusIndicator');
         const canvasContainer = document.getElementById('canvasContainer');
+        const canvasLabelClassContainer = document.getElementById('canvasLabelClassContainer');
 
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
@@ -534,6 +550,8 @@
         }
 
         function redrawAnnotations() {
+            $("#canvasLabelClassContainer").empty();
+            console.log(`canvasLabelClassContainer is being emptied`)
             // Draw existing labels
             currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
@@ -576,10 +594,21 @@
             const canvasLeft = Math.max(0, (containerRect.width - newWidth) / 2);
             const canvasTop = Math.max(0, (containerRect.height - newHeight) / 2);
             $("#annotationCanvas").css({
-                top: `${canvasTop}px`,
                 left: `${canvasLeft}px`,
-                width: newWidth,
-                height: newHeight
+                top: `${canvasTop}px`,
+                width: `${newWidth}px`,
+                height: `${newHeight}px`
+            });
+
+            $("#canvasLabelClassContainer").css({
+                left: `${canvasLeft}px`,
+                top: `${canvasTop}px`,
+                width: `${newWidth}px`,
+                height: `${newHeight}px`,
+                position: 'absolute',
+                'z-index': '100',
+                margin: 'auto',
+                'user-select': 'none'
             });
 
             redrawAnnotations();
@@ -608,13 +637,57 @@
             // Bottom-right corner
             drawDot(x + width, y + height, 5);
 
-            writeClassName(label, isSelected, index);
+            // writeClassName(label, isSelected, index);
+            writeClassNameCSS(label, isSelected, index);
+        }
+
+        function writeClassNameCSS(label, isSelected, index) {
+            console.log(`writeClassNameCSS called`);
+            const className = classNames[label.classId] || `Class ${label.classId}`;
+            const labelText = `${className} (${index + 1})`;
+            const x = (label.cx - label.w / 2) * parseFloat(canvasLabelClassContainer.style.width) || canvas.offsetWidth;
+            const y = (label.cy - label.h / 2) * parseFloat(canvasLabelClassContainer.style.height) || canvas.offsetHeight;
+
+            var classNameSpan = $('<span>');
+            classNameSpan.addClass('label-class-name');
+            classNameSpan.attr('id', `labelClass_${index}`);
+            classNameSpan.text(labelText);
+            // Common styles
+            var cssObj = {
+                position: 'absolute',
+                'z-index': '100',
+                'user-select': 'none',
+                'font-size': `${fontSize}px`,
+                'background-color': isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId]
+            };
+            classNameSpan.css(cssObj);
+            $("#canvasLabelClassContainer").append(classNameSpan);
+            const rect = classNameSpan.get(0).getBoundingClientRect();
+            classNameSpan.css(cssObj);
+            cssObj.left = `${x}px`;
+            cssObj.top = `${((y > rect.height) ? y - (fontSize * 2) : y + rect.height - (fontSize))}px`;
+            classNameSpan.css(cssObj);
+            // classNameSpan.style.position = `absolute;top:${x}px`;
+            // classNameSpan.style.zIndex = 100;
+            // classNameSpan.style.userSelect = 'none';
+            // classNameSpan.style.fontSize = `${fontSize}px`;
+            // Specific styles
+            // cssObj.backgroundColor = isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId];
+        
+            // classNameDiv.style.left = `${x}px`;
+            // classNameDiv.style.top = `${y}px`;
+            console.log('cssObj:', cssObj);
+            console.log('canvas style:', canvas.style);
+            console.log('canvasLabelClassContainer style', canvasLabelClassContainer.style);
+
+            console.log('After append:', classNameSpan.get(0).getBoundingClientRect());
+            console.log('After append style:', classNameSpan.style);
         }
 
         function writeClassName(label, isSelected, index) {
             const x = (label.cx - label.w / 2) * canvas.width;
             const y = (label.cy - label.h / 2) * canvas.height;
-            
+
             // Label background
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
