@@ -58,7 +58,9 @@
         .bounding-box-container .label-class-name {
             position: absolute;
             z-index: 101;
-            padding: 4px;
+            padding: 4px 8px;
+            border-top-left-radius: 1px;
+            border-top-right-radius: 1px;
             font-weight: bold;
             font-family: 'Arial', 'sans-serif';
             white-space: nowrap;
@@ -77,20 +79,23 @@
             position: absolute;
             border-radius: 50%;
             pointer-events: none;
-        }
-
-        .bounding-box-container .marker {
-            position: absolute;
-            pointer-events: none;
-            display: none;
-        }
-
-        .bounding-box.selected .marker {
             display: block;
         }
 
         .bounding-box.selected .dot {
             display: none;
+        }
+
+        .bounding-box-container .marker {
+            position: absolute;
+            pointer-events: all;
+            cursor: default;
+            display: none;
+            border: 1px solid lime;
+        }
+
+        .bounding-box.selected .marker {
+            display: block;
         }
 
         /* Floating control panel */
@@ -534,7 +539,7 @@
         let resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
         let resizeStartPos = null;
         let originalLabel = null;
-        let handleSize = Number("${handleSize}");
+        const handleSize = 10;
 
         // Box move state
         let moveStartPos = null;
@@ -566,7 +571,6 @@
             resizeHandle = null; // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
             resizeStartPos = null;
             originalLabel = null;
-            handleSize = settings ? settings.ui.resizeMarkerSize : 16;
 
             // Box move state
             moveStartPos = null;
@@ -589,15 +593,15 @@
                 drawBoundingBox(label, isSelected, index);
             });
 
-            // Draw resize handles for selected label
-            if (selectedLabelIndex !== -1 && !drawingMode) {
-                drawResizeHandles(currentLabels[selectedLabelIndex]);
-            }
+            // // Draw resize handles for selected label
+            // if (selectedLabelIndex !== -1 && !drawingMode) {
+            //     drawResizeHandles(currentLabels[selectedLabelIndex]);
+            // }
 
-            // Draw current drawing
-            if (isDrawing && drawingMode && startPos && currentPos) {
-                drawCurrentBox();
-            }
+            // // Draw current drawing
+            // if (isDrawing && drawingMode && startPos && currentPos) {
+            //     drawCurrentBox();
+            // }
         }
 
         function draw() {
@@ -654,21 +658,31 @@
             const width = label.w * containerWidth;
             const height = label.h * containerHeight;
 
-            const boxId = drawBoundingBoxCSS('#canvasLabelBoxContainer', label, index, x, y, width, height, isSelected);
+            const boxId = drawCSSBox('#canvasLabelBoxContainer', label, index, x, y, width, height, isSelected);
 
             // Draw dots at all four corners
             const dotColor = classColorNames[label.classId].replace(', 1)', ', 0.9)');
             const dotRadius = 5;
-            drawDotOrMarker(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
-            drawDotOrMarker(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
-            drawDotOrMarker(`#${boxId}`, 2, dotRadius, `dot_${index}_bl`, dotColor);
-            drawDotOrMarker(`#${boxId}`, 3, dotRadius, `dot_${index}_br`, dotColor);
+            drawDot(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
+            drawDot(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
+            drawDot(`#${boxId}`, 2, dotRadius, `dot_${index}_bl`, dotColor);
+            drawDot(`#${boxId}`, 3, dotRadius, `dot_${index}_br`, dotColor);
+
+            // Draw markers at all the four corners and midpoints of sides
+            drawMarker(`#${boxId}`, 0, dotRadius, `marker_${index}_tl`);
+            drawMarker(`#${boxId}`, 1, dotRadius, `marker_${index}_tr`);
+            drawMarker(`#${boxId}`, 2, dotRadius, `marker_${index}_bl`);
+            drawMarker(`#${boxId}`, 3, dotRadius, `marker_${index}_br`);
+            drawMarker(`#${boxId}`, 10, dotRadius, `marker_${index}_tm`);
+            drawMarker(`#${boxId}`, 20, dotRadius, `marker_${index}_lm`);
+            drawMarker(`#${boxId}`, 23, dotRadius, `marker_${index}_bm`);
+            drawMarker(`#${boxId}`, 13, dotRadius, `marker_${index}_rm`);
             if (classNames[label.classId]) {
-                drawLabel(`#${boxId}`, classNames[label.classId], index, classColorNames[label.classId], y);
+                drawLabel(`#${boxId}`, `${index + 1}: ${classNames[label.classId]}`, index, classColorNames[label.classId], y);
             }
         }
 
-        function drawBoundingBoxCSS(container, label, index, x, y, width, height, isSelected = false) {
+        function drawCSSBox(containerId, label, index, x, y, width, height, isSelected = false) {
             const boxId = `boundingBox_${index}`;
 
             // Remove existing box if updating
@@ -687,16 +701,34 @@
                     backgroundColor: classColorNames[label.classId].replace(', 1)', ', 0.3)'),
                     borderColor: classColorNames[label.classId].replace(', 1)', ', 0.9)')
                 });
-            $(container).append(boundingBox);
+            boundingBox.mousemove((e) => {
+                if (isInMoveBoxMode && e.target.id.search(`boundingBox_${selectedLabelIndex}`) !== -1) {
+                    e.preventDefault();
+                    const pos = getMousePosOnCanvas(e);
+                    const mouseX = pos.x;
+                    const mouseY = pos.y;
+                    performMouseMoveBoxMove(mouseX, mouseY);
+                }
+            });
+
+            boundingBox.mouseup((e) => {
+                if (isInMoveBoxMode) {
+                    isInMoveBoxMode = false;
+                    moveStartPos = null;
+                    moveStartLabelCenter = null;
+                    canvas.style.cursor = 'move';
+                }
+            });
+            $(containerId).append(boundingBox);
             return boxId;
         }
 
         // Function to draw dots at specific coordinates with specific radius
-        function drawDotOrMarker(container, position, radius = 5, id = null, color = '#44ff44', marker=false) {
-            const dotmarkerId = id || marker ? `marker_${Date.now()}-${Math.random()}` : `dot_${Date.now()}-${Math.random()}`;
+        function drawDot(containerId, position, radius = 5, id = null, color = '#44ff44') {
+            const dotId = id || `dot_${Date.now()}-${Math.random()}`;
 
             // Remove existing dot if updating
-            $(`#${dotmarkerId}`).remove();
+            $(`#${dotId}`).remove();
             let horiz, vert, hval, vval;
             switch (position) {
                 case 0: // top-left
@@ -725,9 +757,9 @@
                     break;
             }
             // Create dot element
-            const dotmarkerElem = $('<div>')
-                .addClass(marker ? 'marker' : 'dot')
-                .attr('id', dotmarkerId)
+            const dotElem = $('<div>')
+                .addClass('dot')
+                .attr('id', dotId)
                 .css({
                     width: `${radius * 2}px`,
                     height: `${radius * 2}px`,
@@ -736,11 +768,148 @@
                 .css(horiz, `-${radius}px`)
                 .css(vert, `-${radius}px`);
 
-            $(container).append(dotmarkerElem);
-            return dotmarkerId;
+            $(containerId).append(dotElem);
+            return dotId;
         }
 
-        function drawLabel(container, text, index, color, globalY) {
+        // Function to draw marker at specific coordinates with specific size
+        function drawMarker(containerId, position, halfSize, id = null, color = '#ffffff') {
+            const markerId = id || `marker_${Date.now()}-${Math.random()}`;
+
+            // Remove existing marker if updating
+            $(`#${markerId}`).remove();
+            halfSize -= 1; // reduce the size of border 
+            // Create marker element
+            const markerElem = $('<div>')
+                .addClass('marker')
+                .attr('id', markerId)
+                .css({
+                    width: `${halfSize * 2}px`,
+                    height: `${halfSize * 2}px`,
+                    backgroundColor: color,
+                });
+            switch (position) {
+                case 0: // top-left
+                    markerElem.css({
+                        cursor: 'nw-resize',
+                        top: `-${halfSize}px`,
+                        left: `-${halfSize}px`,
+                    });
+                    break;
+                case 1: // top-right
+                    markerElem.css({
+                        cursor: 'ne-resize',
+                        top: `-${halfSize}px`,
+                        right: `-${halfSize}px`,
+                    });
+                    break;
+                case 10: // top-middle
+                    markerElem.css({
+                        cursor: 'n-resize',
+                        top: `-${halfSize}px`,
+                        left: `calc(50% - ${halfSize}px)`,
+                    });
+                    break;
+                case 2: // bottom-left
+                    markerElem.css({
+                        cursor: 'sw-resize',
+                        bottom: `-${halfSize}px`,
+                        left: `-${halfSize}px`,
+                    });
+                    break;
+                case 20: // left-middle
+                    markerElem.css({
+                        cursor: 'w-resize',
+                        top: `calc(50% - ${halfSize}px)`,
+                        left: `-${halfSize}px`,
+                    });
+                    break;
+                case 23: // bottom-middle
+                    markerElem.css({
+                        cursor: 's-resize',
+                        bottom: `-${halfSize}px`,
+                        left: `calc(50% - ${halfSize}px)`,
+                    });
+                    break;
+                case 3: // bottom-right
+                    markerElem.css({
+                        cursor: 'se-resize',
+                        bottom: `-${halfSize}px`,
+                        right: `-${halfSize}px`,
+                    });
+                    break;
+                case 13: // right-middle
+                    markerElem.css({
+                        cursor: 'e-resize',
+                        top: `calc(50% - ${halfSize}px)`,
+                        right: `-${halfSize}px`,
+                    });
+                    break;
+            }
+            $(containerId).append(markerElem);
+
+            markerElem.mousedown((e) => {
+                console.log('marker mousedown', e);
+                if (selectedLabelIndex !== -1) {
+                    e.preventDefault();
+                    const pos = getMousePosOnCanvas(e);
+                    const mouseX = pos.x;
+                    const mouseY = pos.y;
+                    isResizing = true;
+                    resizeHandle = getHandleFromPosition(e.target.id.substring(e.target.id.length - 2));
+                    resizeStartPos = { x: mouseX, y: mouseY };
+                    originalLabel = { ...currentLabels[selectedLabelIndex] };
+                }
+            });
+
+            markerElem.mousemove((e) => {
+                console.log('marker mousemove', e);
+                console.log('marker mousemove condition: ', isResizing && e.target.id.search(`marker_${selectedLabelIndex}`) !== -1)
+                if (isResizing && e.target.id.search(`marker_${selectedLabelIndex}`) !== -1) {
+                    e.preventDefault();
+                    console.log('preventer default');
+                    const pos = getMousePosOnCanvas(e);
+                    const mouseX = pos.x;
+                    const mouseY = pos.y;
+                    const deltaX = mouseX - resizeStartPos.x;
+                    const deltaY = mouseY - resizeStartPos.y;
+                    
+                    console.log('beforez resizing the box: labels', currentLabels[selectedLabelIndex]);
+                    currentLabels[selectedLabelIndex] = resizeLabel(originalLabel, resizeHandle, deltaX, deltaY);
+                    console.log('afrer resizing the box: labels', currentLabels[selectedLabelIndex]);
+                    updateLabelsList();
+                    // draw only the selected box
+                    redrawSelectedLabelBox();
+                    showDiscardChangesText();
+                }
+            });
+
+            markerElem.mouseup((e) => {
+                console.log('marker mouseup', e);
+                if (isResizing) {
+                    e.preventDefault();
+                    isResizing = false;
+                    resizeHandle = null;
+                    resizeStartPos = null;
+                    originalLabel = null;
+                }
+            });
+            return markerId;
+        }
+
+        function redrawSelectedLabelBox() {
+            drawBoundingBox(currentLabels[selectedLabelIndex], true, selectedLabelIndex);
+        }
+
+        function getHandleFromPosition(position) {
+            return position
+                .replace('t', 'n')
+                .replace('l', 'w')
+                .replace('b', 's')
+                .replace('r', 'e');
+        }
+
+        function drawLabel(containerId, text, index, color, globalY) {
             const labelId = `label_${index}`;
 
             // Remove existing label if updating
@@ -756,13 +925,13 @@
                     backgroundColor: color
                 });
             // Add to container first to calculate dimensions
-            $(container).append(labelElem);
+            $(containerId).append(labelElem);
 
             const rect = labelElem.get(0).getBoundingClientRect();
-            
+
             labelElem.css({
-                left: `${Math.min(0, $(container).css('width') - rect.width)}px`,
-                top: `${-Math.min(globalY, rect.height)}px`
+                left: `${Math.min(0, $(containerId).css('width') - rect.width)}px`,
+                top: `${-Math.min(globalY, rect.height + 2)}px`
             });
             return labelId;
         }
@@ -889,6 +1058,7 @@
         }
 
         function resizeLabel(label, handleId, deltaX, deltaY) {
+            console.log('resizeLabel called,', label, handleId, deltaX, deltaY);
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
 
@@ -900,31 +1070,39 @@
 
             // Apply resize based on handle
             switch (handleId) {
+                case 'tl':
                 case 'nw':
                     x1 += deltaX;
                     y1 += deltaY;
                     break;
+                case 't':
                 case 'n':
                     y1 += deltaY;
                     break;
+                case 'tr':
                 case 'ne':
                     x2 += deltaX;
                     y1 += deltaY;
                     break;
+                case 'r':
                 case 'e':
                     x2 += deltaX;
                     break;
+                case 'br':
                 case 'se':
                     x2 += deltaX;
                     y2 += deltaY;
                     break;
+                case 'b':
                 case 's':
                     y2 += deltaY;
                     break;
+                case 'bl':
                 case 'sw':
                     x1 += deltaX;
                     y2 += deltaY;
                     break;
+                case 'l':
                 case 'w':
                     x1 += deltaX;
                     break;
@@ -933,6 +1111,7 @@
             // Ensure minimum size
             const minSize = 10;
             if (Math.abs(x2 - x1) < minSize || Math.abs(y2 - y1) < minSize) {
+                console.log('Early return from resizeLabel');
                 return label; // Return unchanged if too small
             }
 
@@ -950,7 +1129,7 @@
                 w: Math.abs(x2 - x1) / canvasWidth,
                 h: Math.abs(y2 - y1) / canvasHeight
             };
-
+            console.log('new label from resizeLabel:', newLabel);
             return newLabel;
         }
 
@@ -1195,7 +1374,7 @@
             currentLabels[selectedLabelIndex].cx = Math.max(currentLabels[selectedLabelIndex].w / 2, Math.min(newCX, 1 - currentLabels[selectedLabelIndex].w / 2));
             currentLabels[selectedLabelIndex].cy = Math.max(currentLabels[selectedLabelIndex].h / 2, Math.min(newCY, 1 - currentLabels[selectedLabelIndex].h / 2));;
             updateLabelsList();
-            draw();
+            redrawSelectedLabelBox();
             showDiscardChangesText();
         }
 
@@ -1281,17 +1460,6 @@
                 startPos = { x: mouseX, y: mouseY };
                 isDrawing = true;
             } else {
-                // Check for resize handle first
-                const handle = getResizeHandle(mouseX, mouseY);
-                if (handle && selectedLabelIndex !== -1) {
-                    isResizing = true;
-                    resizeHandle = handle;
-                    resizeStartPos = { x: mouseX, y: mouseY };
-                    originalLabel = { ...currentLabels[selectedLabelIndex] };
-                    canvas.style.cursor = getCursorForHandle(handle);
-                    return;
-                }
-
                 // Select existing label
                 const clickedIndex = findLabelAtPosition(mouseX, mouseY);
                 switch (clickedIndex) {
@@ -1328,25 +1496,11 @@
             const mouseX = pos.x;
             const mouseY = pos.y;
 
-            if (isResizing && selectedLabelIndex !== -1) {
-                const deltaX = mouseX - resizeStartPos.x;
-                const deltaY = mouseY - resizeStartPos.y;
-
-                currentLabels[selectedLabelIndex] = resizeLabel(originalLabel, resizeHandle, deltaX, deltaY);
-                updateLabelsList();
-                draw();
-                showDiscardChangesText();
-            } else if (isDrawing && drawingMode) {
+            if (isDrawing && drawingMode) {
                 currentPos = { x: mouseX, y: mouseY };
-                draw();
-            } else if (isInMoveBoxMode) {
-                performMouseMoveBoxMove(mouseX, mouseY);
+                drawCurrentBox();
             } else if (!drawingMode) {
-                // Update cursor based on what's under the mouse
-                const handle = getResizeHandle(mouseX, mouseY);
-                if (handle && selectedLabelIndex !== -1) {
-                    canvas.style.cursor = getCursorForHandle(handle);
-                } else if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
+                if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
                     canvas.style.cursor = 'move';
                 } else {
                     canvas.style.cursor = 'auto';
@@ -1355,16 +1509,7 @@
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (isResizing) {
-                isResizing = false;
-                resizeHandle = null;
-                resizeStartPos = null;
-                originalLabel = null;
-                canvas.style.cursor = 'auto';
-            } else if (isInMoveBoxMode) {
-                isInMoveBoxMode = false;
-                moveStartPos = null;
-                moveStartLabelCenter = null;
+            if (isInMoveBoxMode) {
                 canvas.style.cursor = 'move';
             } else if (isDrawing && drawingMode && startPos && currentPos) {
                 const x = Math.min(startPos.x, currentPos.x);

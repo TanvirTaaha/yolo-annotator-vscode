@@ -61,7 +61,7 @@
         .dot {
             position: absolute;
             border-radius: 50%;
-            pointer-events: none;
+            pointer-events: all;
             transform: translate(-50%, -50%);
         }
 
@@ -212,7 +212,9 @@
                     width: `${radius * 2}px`,
                     height: `${radius * 2}px`
                 });
-            
+            dot.mousedown((e) => {
+                console.log(`mousedown: e.target.id: ${e.target.id}, position:${e.target.id.substring(e.target.id.length - 2)}`);
+            });
             $(container).append(dot);
             return dotId;
         }
