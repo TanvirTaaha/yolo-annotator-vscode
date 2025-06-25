@@ -48,18 +48,49 @@
             image-rendering: crisp-edges;
         }
 
-        .canvas-container #canvasLabelClassContainer {
+        .bounding-box-container {
             position: absolute;
-            z-index: 100;
             margin: auto;
+            z-index: 100;
             user-select: none;
         }
 
-        .canvas-container .label-class-name {
+        .bounding-box-container .label-class-name {
             position: absolute;
-            z-index: 100;
+            z-index: 101;
             padding: 4px;
-            font-family: 'Work Sans', 'Trebuchet MS', 'Lucida Grande', 'sans-serif';
+            font-weight: bold;
+            font-family: 'Arial', 'sans-serif';
+            white-space: nowrap;
+        }
+
+        .bounding-box-container .bounding-box {
+            position: absolute;
+            border: 2px solid;
+            box-sizing: border-box;
+            pointer-events: none;
+            background-color: transparent;
+        }
+
+        /* Dot styles */
+        .bounding-box-container .dot {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .bounding-box-container .marker {
+            position: absolute;
+            pointer-events: none;
+            display: none;
+        }
+
+        .bounding-box.selected .marker {
+            display: block;
+        }
+
+        .bounding-box.selected .dot {
+            display: none;
         }
 
         /* Floating control panel */
@@ -363,7 +394,8 @@
 <body>
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
-        <div id="canvasLabelClassContainer"></div>
+        <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
+        <!-- <div class="bounding-box-container" id="canvasLabelClassContainer"></div> -->
     </div>
 
     <!-- Floating Control Panel -->
@@ -458,7 +490,6 @@
         const collapseBtn = document.getElementById('collapseBtn');
         const statusIndicator = document.getElementById('statusIndicator');
         const canvasContainer = document.getElementById('canvasContainer');
-        const canvasLabelClassContainer = document.getElementById('canvasLabelClassContainer');
 
         // Control elements
         const prevBtn = document.getElementById('prevBtn');
@@ -515,7 +546,7 @@
         const minZoom = 1.0;
         const maxZoom = 5.0;
         const zoomStep = 0.1;
-        let fontSize = 16;
+        let fontSize = 12;
         let mousePosBeforeZoom = { x: 0, y: 0 };
 
 
@@ -550,8 +581,8 @@
         }
 
         function redrawAnnotations() {
-            $("#canvasLabelClassContainer").empty();
-            console.log(`canvasLabelClassContainer is being emptied`)
+            $(".bounding-box-container").empty();
+            console.log(`bounding-box-container is being emptied`)
             // Draw existing labels
             currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
@@ -600,7 +631,7 @@
                 height: `${newHeight}px`
             });
 
-            $("#canvasLabelClassContainer").css({
+            $(".bounding-box-container").css({
                 left: `${canvasLeft}px`,
                 top: `${canvasTop}px`,
                 width: `${newWidth}px`,
@@ -615,38 +646,131 @@
         }
 
         function drawBoundingBox(label, isSelected, index) {
-            const x = (label.cx - label.w / 2) * canvas.width;
-            const y = (label.cy - label.h / 2) * canvas.height;
-            const width = label.w * canvas.width;
-            const height = label.h * canvas.height;
-            // Box
-            ctx.strokeStyle = isSelected ? 'rgba(255, 68, 68, 0.9)' : classColorNames[label.classId].replace(', 1)', ', 0.9)');
-            ctx.lineWidth = isSelected ? 3 : 2;
-            ctx.strokeRect(x, y, width, height);
-            // Box fill
-            ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 0.3)' : classColorNames[label.classId].replace(', 1)', ', 0.3)');
-            ctx.fillRect(x, y, width, height);
-            // Corner dots
-            ctx.fillStyle = isSelected ? 'rgba(255, 68, 68, 1.0)' : classColorNames[label.classId].replace(', 1)', ', 1.0)');
-            // Top-left corner
-            drawDot(x, y, 5);
-            // Top-right corner
-            drawDot(x + width, y, 5);
-            // Bottom-left corner
-            drawDot(x, y + height, 5);
-            // Bottom-right corner
-            drawDot(x + width, y + height, 5);
+            const containerWidth = parseFloat($('.bounding-box-container').css('width')) || canvas.offsetWidth;
+            const containerHeight = parseFloat($('.bounding-box-container').css('height')) || canvas.offsetHeight;
 
-            // writeClassName(label, isSelected, index);
-            writeClassNameCSS(label, isSelected, index);
+            const x = (label.cx - label.w / 2) * containerWidth;
+            const y = (label.cy - label.h / 2) * containerHeight;
+            const width = label.w * containerWidth;
+            const height = label.h * containerHeight;
+
+            const boxId = drawBoundingBoxCSS('#canvasLabelBoxContainer', label, index, x, y, width, height, isSelected);
+
+            // Draw dots at all four corners
+            const dotColor = classColorNames[label.classId].replace(', 1)', ', 0.9)');
+            const dotRadius = 5;
+            drawDotOrMarker(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
+            drawDotOrMarker(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
+            drawDotOrMarker(`#${boxId}`, 2, dotRadius, `dot_${index}_bl`, dotColor);
+            drawDotOrMarker(`#${boxId}`, 3, dotRadius, `dot_${index}_br`, dotColor);
+            if (classNames[label.classId]) {
+                drawLabel(`#${boxId}`, classNames[label.classId], index, classColorNames[label.classId], y);
+            }
         }
 
-        function writeClassNameCSS(label, isSelected, index) {
+        function drawBoundingBoxCSS(container, label, index, x, y, width, height, isSelected = false) {
+            const boxId = `boundingBox_${index}`;
+
+            // Remove existing box if updating
+            $(`#${boxId}`).remove();
+
+            // Create bounding box element
+            const boundingBox = $('<div>')
+                .addClass('bounding-box')
+                .addClass(isSelected ? 'selected' : '')
+                .attr('id', boxId)
+                .css({
+                    left: `${x}px`,
+                    top: `${y}px`,
+                    width: `${width}px`,
+                    height: `${height}px`,
+                    backgroundColor: classColorNames[label.classId].replace(', 1)', ', 0.3)'),
+                    borderColor: classColorNames[label.classId].replace(', 1)', ', 0.9)')
+                });
+            $(container).append(boundingBox);
+            return boxId;
+        }
+
+        // Function to draw dots at specific coordinates with specific radius
+        function drawDotOrMarker(container, position, radius = 5, id = null, color = '#44ff44', marker=false) {
+            const dotmarkerId = id || marker ? `marker_${Date.now()}-${Math.random()}` : `dot_${Date.now()}-${Math.random()}`;
+
+            // Remove existing dot if updating
+            $(`#${dotmarkerId}`).remove();
+            let horiz, vert, hval, vval;
+            switch (position) {
+                case 0: // top-left
+                    horiz = 'left';
+                    vert = 'top';
+                    // hval = `-${radius}px`;
+                    // vval = `-${radius}px`;
+                    break;
+                case 1: // top-right
+                    horiz = 'right';
+                    vert = 'top';
+                    // hval = `-${radius}px`;
+                    // vval = `-${radius}px`;
+                    break;
+                case 2: // bottom-left
+                    horiz = 'left';
+                    vert = 'bottom';
+                    // hval = `-${radius}px`;
+                    // vval = `-${radius}px`;
+                    break;
+                case 3: // bottom-right
+                    horiz = 'right';
+                    vert = 'bottom';
+                    // hval = `-${radius}px`;
+                    // vval = `-${radius}px`;
+                    break;
+            }
+            // Create dot element
+            const dotmarkerElem = $('<div>')
+                .addClass(marker ? 'marker' : 'dot')
+                .attr('id', dotmarkerId)
+                .css({
+                    width: `${radius * 2}px`,
+                    height: `${radius * 2}px`,
+                    backgroundColor: color,
+                })
+                .css(horiz, `-${radius}px`)
+                .css(vert, `-${radius}px`);
+
+            $(container).append(dotmarkerElem);
+            return dotmarkerId;
+        }
+
+        function drawLabel(container, text, index, color, globalY) {
+            const labelId = `label_${index}`;
+
+            // Remove existing label if updating
+            $(`#${labelId}`).remove();
+
+            // Create label element
+            const labelElem = $('<div>')
+                .addClass('label-class-name')
+                .attr('id', labelId)
+                .text(text)
+                .css({
+                    'font-size': `${fontSize}px`,
+                    backgroundColor: color
+                });
+            // Add to container first to calculate dimensions
+            $(container).append(labelElem);
+
+            const rect = labelElem.get(0).getBoundingClientRect();
+            
+            labelElem.css({
+                left: `${Math.min(0, $(container).css('width') - rect.width)}px`,
+                top: `${-Math.min(globalY, rect.height)}px`
+            });
+            return labelId;
+        }
+
+        function writeClassNameCSS(label, isSelected, index, x, y) {
             console.log(`writeClassNameCSS called`);
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
-            const x = (label.cx - label.w / 2) * parseFloat(canvasLabelClassContainer.style.width) || canvas.offsetWidth;
-            const y = (label.cy - label.h / 2) * parseFloat(canvasLabelClassContainer.style.height) || canvas.offsetHeight;
 
             var classNameSpan = $('<span>');
             classNameSpan.addClass('label-class-name');
@@ -658,30 +782,16 @@
                 'z-index': '100',
                 'user-select': 'none',
                 'font-size': `${fontSize}px`,
-                'background-color': isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId]
+                'background-color': isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId],
             };
             classNameSpan.css(cssObj);
             $("#canvasLabelClassContainer").append(classNameSpan);
             const rect = classNameSpan.get(0).getBoundingClientRect();
             classNameSpan.css(cssObj);
             cssObj.left = `${x}px`;
-            cssObj.top = `${((y > rect.height) ? y - (fontSize * 2) : y + rect.height - (fontSize))}px`;
+            cssObj.top = `${((y > rect.height) ? y - (fontSize * 1.9) : y)}px`;
+            cssObj.borderRadius = (y > rect.height) ? `${fontSize * 0.5}px ${fontSize * 0.5}px 0px 0px` : `0px 0px ${fontSize * 0.5}px ${fontSize * 0.5}px`;
             classNameSpan.css(cssObj);
-            // classNameSpan.style.position = `absolute;top:${x}px`;
-            // classNameSpan.style.zIndex = 100;
-            // classNameSpan.style.userSelect = 'none';
-            // classNameSpan.style.fontSize = `${fontSize}px`;
-            // Specific styles
-            // cssObj.backgroundColor = isSelected ? 'rgba(255, 68, 68, 1)' : classColorNames[label.classId];
-        
-            // classNameDiv.style.left = `${x}px`;
-            // classNameDiv.style.top = `${y}px`;
-            console.log('cssObj:', cssObj);
-            console.log('canvas style:', canvas.style);
-            console.log('canvasLabelClassContainer style', canvasLabelClassContainer.style);
-
-            console.log('After append:', classNameSpan.get(0).getBoundingClientRect());
-            console.log('After append style:', classNameSpan.style);
         }
 
         function writeClassName(label, isSelected, index) {
@@ -704,13 +814,6 @@
             // Label text
             ctx.fillStyle = '#ffffff';
             ctx.fillText(labelText, x + 4, (y > bgRectHeight) ? y - (fontSize * 0.4) : y + bgRectHeight - (fontSize * 0.4));
-        }
-
-        function drawDot(x, y, radius) {
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.closePath();
         }
 
         function getHandles(x, y, width, height) {
@@ -1249,7 +1352,6 @@
                     canvas.style.cursor = 'auto';
                 }
             }
-            console.log(`mouse position: mouseX:${mouseX}, mouseY:${mouseY}`);
         });
 
         window.addEventListener('mouseup', (e) => {

@@ -88,9 +88,9 @@
         },
         "yoloAnnotator.ui.fontSize": {
           "type": "number",
-          "default": 16,
+          "default": 12,
           "minimum": 10,
-          "maximum": 64,
+          "maximum": 32,
           "description": "Font size of class names on top of bounding box",
           "scope": "resource"
         }
