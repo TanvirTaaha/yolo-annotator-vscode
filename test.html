@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
     <title>Mouse Following Lines</title>
     <style>
         body {
@@ -18,41 +20,36 @@
             /* Just for visibility */
         }
 
-        .mouse-line-h,
-        .mouse-line-v {
+        .mouse-line {
             position: fixed;
-            /* Position relative to the viewport */
             background-color: rgba(0, 0, 0, 0.5);
-            /* Semi-transparent black */
             pointer-events: none;
-            /* Crucial: Allows mouse events to pass through the lines */
             z-index: 9999;
-            /* Ensure lines are on top */
+            display: none;
         }
 
-        .mouse-line-h {
+        .mouse-line.visible {
+            display: block;
+        }
+
+        #horizontalLine {
             height: 1px;
-            /* Very thin horizontal line */
-            width: 100vw;
-            /* Spans the entire viewport width */
+            width: 100%;
             left: 0;
-            /* Align to the left edge */
         }
 
-        .mouse-line-v {
+        #verticalLine {
             width: 1px;
-            /* Very thin vertical line */
-            height: 100vh;
-            /* Spans the entire viewport height */
+            height: 100%;
             top: 0;
-            /* Align to the top edge */
         }
     </style>
 </head>
 
 <body>
-    <div class="mouse-line-h" id="horizontalLine"></div>
-    <div class="mouse-line-v" id="verticalLine"></div>
+    <div class="mouse-line" id="horizontalLine"></div>
+    <div class="mouse-line" id="verticalLine"></div>
+    <button id="show">Show Lines</button>
 
     <script>
         document.addEventListener('mousemove', function (e) {
@@ -70,6 +67,9 @@
             // Position the vertical line
             // The left of the vertical line should be at the mouse's X position
             verticalLine.style.left = mouseX + 'px';
+        });
+        document.getElementById('show').addEventListener('click', (e)=> {
+            $('.mouse-line').toggleClass('visible');
         });
     </script>
 </body>

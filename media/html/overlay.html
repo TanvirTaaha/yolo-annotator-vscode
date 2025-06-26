@@ -393,6 +393,30 @@
             text-decoration: underline;
             cursor: pointer;
         }
+
+        .mouse-line {
+            position: fixed;
+            background-color: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+        }
+
+        .mouse-line.visible {
+            display: block;
+        }
+
+        #horizontalLine {
+            height: 1px;
+            width: 100%;
+            left: 0;
+        }
+
+        #verticalLine {
+            width: 1px;
+            height: 100%;
+            top: 0;
+        }
     </style>
 </head>
 
@@ -400,8 +424,8 @@
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
         <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
-        <div class="mouse-line-h" id="horizontalLine"></div>
-        <div class="mouse-line-v" id="verticalLine"></div>
+        <div class="mouse-line" id="horizontalLine"></div>
+        <div class="mouse-line" id="verticalLine"></div>
     </div>
 
     <!-- Floating Control Panel -->
@@ -646,7 +670,15 @@
             });
 
             $('#canvasLabelBoxContainer').mouseup(undoResizing);
-            $('#canvasLabelBoxContainer').mouseleave(undoResizing);
+            $('#canvasLabelBoxContainer').mouseleave((e) => {
+                undoResizing();
+            });
+            $('#canvasLabelBoxContainer').mousemove((e) => {
+                if (drawingMode) {
+                    $('#horizontalLine').css('top', `${e.clientY}px`);
+                    $('#verticalLine').css('left', `${e.clientX}px`);
+                }
+            });
 
             redrawAnnotations();
         }
@@ -665,13 +697,14 @@
             // Draw dots at all four corners
             let dotColor = (index >= 0 && index < currentLabels.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
             dotColor = dotColor.replace(', 1)', ', 0.9)');
-            const dotRadius = 5;
+            let dotRadius = 5;
             drawDot(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
             drawDot(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
             drawDot(`#${boxId}`, 2, dotRadius, `dot_${index}_bl`, dotColor);
             drawDot(`#${boxId}`, 3, dotRadius, `dot_${index}_br`, dotColor);
 
             // Draw markers at all the four corners and midpoints of sides
+            dotRadius -= 1;
             drawMarker(`#${boxId}`, 0, dotRadius, `marker_${index}_tl`);
             drawMarker(`#${boxId}`, 1, dotRadius, `marker_${index}_tr`);
             drawMarker(`#${boxId}`, 2, dotRadius, `marker_${index}_bl`);
@@ -785,7 +818,7 @@
                     markerElem.css({
                         cursor: 'n-resize',
                         top: `-${halfSize}px`,
-                        left: `calc(50% - ${halfSize}px)`,
+                        left: `calc(50% - ${halfSize + 2}px)`,
                     });
                     break;
                 case 2: // bottom-left
@@ -798,7 +831,7 @@
                 case 20: // left-middle
                     markerElem.css({
                         cursor: 'w-resize',
-                        top: `calc(50% - ${halfSize}px)`,
+                        top: `calc(50% - ${halfSize + 2}px)`,
                         left: `-${halfSize}px`,
                     });
                     break;
@@ -806,7 +839,7 @@
                     markerElem.css({
                         cursor: 's-resize',
                         bottom: `-${halfSize}px`,
-                        left: `calc(50% - ${halfSize}px)`,
+                        left: `calc(50% - ${halfSize + 2}px)`,
                     });
                     break;
                 case 3: // bottom-right
@@ -819,7 +852,7 @@
                 case 13: // right-middle
                     markerElem.css({
                         cursor: 'e-resize',
-                        top: `calc(50% - ${halfSize}px)`,
+                        top: `calc(50% - ${halfSize + 2}px)`,
                         right: `-${halfSize}px`,
                     });
                     break;
@@ -1086,44 +1119,54 @@
         }
 
         function updateLabelsList() {
-            labelCount.textContent = currentLabels.length;
+            const $labelsList = $('#labelsList');
+            const $labelCount = $('#labelCount');
+
+            $labelCount.text(currentLabels.length);
 
             if (currentLabels.length === 0) {
-                labelsList.innerHTML = '<div style="color: #888; font-style: italic; text-align: center;">No labels</div>';
+                $labelsList.html('<div style="color: #888; font-style: italic; text-align: center;">No labels</div>');
                 return;
             }
 
-            labelsList.innerHTML = '';
-            currentLabels.forEach((label, index) => {
-                const div = document.createElement('div');
-                div.className = 'label-item' + (index === selectedLabelIndex ? ' selected' : '');
+            $labelsList.empty();
 
+            $.each(currentLabels, (index, label) => {
                 const className = classNames[label.classId] || `Class ${label.classId}`;
-                div.innerHTML = `
-                    <div>
-                        <div class="label-class">${className}</div>
-                        <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)} h:${label.h.toFixed(3)}</div>
-                    </div>
-                    <button id="labelEntryDeleteBtn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
-                `;
+                const isSelected = index === selectedLabelIndex;
 
-                div.getElementsByClassName('label-class')[0].addEventListener('click', (e) => {
-                    showPopup(index);
+                const $labelItem = $('<div>', {
+                    class: `label-item ${isSelected ? 'selected' : ''}`,
+                    html: `
+                <div>
+                    <div class="label-class">${className}</div>
+                    <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)} h:${label.h.toFixed(3)}</div>
+                </div>
+                <button class="label-delete-btn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
+            `
                 });
 
-                div.getElementsByTagName("button")[0].addEventListener('click', (e) => {
-                    deleteLabel(index);
-                });
-
-                div.addEventListener('click', (e) => {
-                    if (e.target.tagName !== 'BUTTON') {
-                        clicked = true;
+                // Event handlers
+                $labelItem
+                    .find('.label-class').on('click', (e) => {
+                        e.stopPropagation(); // Prevent bubbling to parent
+                        showPopup(index);
+                    }).end()
+                    .find('.label-delete-btn').on('click', (e) => {
+                        e.stopPropagation(); // Prevent bubbling to parent
+                        deleteLabel(index);
                         unSelectLabel();
-                        selectLabel(index);
-                    }
-                });
+                    }).end()
+                    .on('click', (e) => {
+                        // Check if the clicked element is NOT a button or .label-class
+                        if (!$(e.target).is('button') && !$(e.target).hasClass('label-class')) {
+                            clicked = true;
+                            unSelectLabel();
+                            selectLabel(index);
+                        }
+                    });
 
-                labelsList.appendChild(div);
+                $labelsList.append($labelItem);
             });
         }
 
@@ -1147,8 +1190,6 @@
                 selectedLabelIndex = selectedLabelIndex > 0 ? selectedLabelIndex - 1 : -1;
             }
             showDiscardChangesText();
-            updateLabelsList();
-            draw();
             showStatus('Label deleted', false);
         }
 
@@ -1337,6 +1378,7 @@
             addLabelBtn.className = drawingMode ? 'danger' : '';
             $('#canvasLabelBoxContainer').css('cursor', drawingMode ? 'crosshair' : 'default');
             controlPanel.classList.toggle('ghosted', drawingMode);
+            $('.mouse-line').toggleClass('visible', drawingMode);
         });
 
         saveBtn.addEventListener('click', () => {
@@ -1390,14 +1432,17 @@
         var canvasClicked = false;
         // Canvas interaction
         window.addEventListener('mousedown', (e) => {
-            if (e.target.id === 'controlPanel') return;
+            if ($(e.target).closest('#controlPanel, #labelsList').length > 0) {
+                return;
+            }
             const pos = getMousePosOnCanvas(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
             if (drawingMode) {
-                startPos = { x: mouseX, y: mouseY };
                 isDrawing = true;
+                startPos = { x: mouseX, y: mouseY };
+                currentPos = startPos;
             } else {
                 // Check for resize handle first
                 const handle = getResizeHandle(mouseX, mouseY);
@@ -1512,6 +1557,7 @@
                 addLabelBtn.className = '';
                 $('#canvasLabelBoxContainer').css('cursor', 'auto');
                 controlPanel.classList.toggle('ghosted', drawingMode);
+                $('.mouse-line').removeClass('visible');
                 draw();
                 showDiscardChangesText();
             }
@@ -1606,6 +1652,8 @@
                     if (drawingMode) {
                         e.preventDefault();
                         addLabelBtn.click();
+                    } else {
+                        unSelectLabel();
                     }
                     break;
             }
