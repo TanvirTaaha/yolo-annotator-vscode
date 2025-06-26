@@ -400,7 +400,8 @@
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
         <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
-        <!-- <div class="bounding-box-container" id="canvasLabelClassContainer"></div> -->
+        <div class="mouse-line-h" id="horizontalLine"></div>
+        <div class="mouse-line-v" id="verticalLine"></div>
     </div>
 
     <!-- Floating Control Panel -->
@@ -540,6 +541,15 @@
         let resizeStartPos = null;
         let originalLabel = null;
         const handleSize = 10;
+        const newClassColor = 'rgba(255, 255, 68, 1)';
+        const undoResizing = (e) => {
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle = null;
+                resizeStartPos = null;
+                originalLabel = null;
+            }
+        };
 
         // Box move state
         let moveStartPos = null;
@@ -586,22 +596,11 @@
 
         function redrawAnnotations() {
             $(".bounding-box-container").empty();
-            console.log(`bounding-box-container is being emptied`)
             // Draw existing labels
             currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
                 drawBoundingBox(label, isSelected, index);
             });
-
-            // // Draw resize handles for selected label
-            // if (selectedLabelIndex !== -1 && !drawingMode) {
-            //     drawResizeHandles(currentLabels[selectedLabelIndex]);
-            // }
-
-            // // Draw current drawing
-            // if (isDrawing && drawingMode && startPos && currentPos) {
-            //     drawCurrentBox();
-            // }
         }
 
         function draw() {
@@ -646,6 +645,9 @@
                 'user-select': 'none'
             });
 
+            $('#canvasLabelBoxContainer').mouseup(undoResizing);
+            $('#canvasLabelBoxContainer').mouseleave(undoResizing);
+
             redrawAnnotations();
         }
 
@@ -658,10 +660,11 @@
             const width = label.w * containerWidth;
             const height = label.h * containerHeight;
 
-            const boxId = drawCSSBox('#canvasLabelBoxContainer', label, index, x, y, width, height, isSelected);
+            const boxId = drawCSSBox('#canvasLabelBoxContainer', label.classId, index, x, y, width, height, isSelected);
 
             // Draw dots at all four corners
-            const dotColor = classColorNames[label.classId].replace(', 1)', ', 0.9)');
+            let dotColor = (index >= 0 && index < currentLabels.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
+            dotColor = dotColor.replace(', 1)', ', 0.9)');
             const dotRadius = 5;
             drawDot(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
             drawDot(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
@@ -682,13 +685,13 @@
             }
         }
 
-        function drawCSSBox(containerId, label, index, x, y, width, height, isSelected = false) {
-            console.log('class Color names', classColorNames);
+        function drawCSSBox(containerId, classId, index, x, y, width, height, isSelected = false) {
             const boxId = `boundingBox_${index}`;
 
             // Remove existing box if updating
             $(`#${boxId}`).remove();
 
+            const color = (classId >= 0) ? classColorNames[classId] : newClassColor;
             // Create bounding box element
             const boundingBox = $('<div>')
                 .addClass('bounding-box')
@@ -699,8 +702,8 @@
                     top: `${y}px`,
                     width: `${width}px`,
                     height: `${height}px`,
-                    backgroundColor: classColorNames[label.classId].replace(', 1)', ', 0.3)') || 'rgba(255, 255, 68, 0.3)',
-                    borderColor: classColorNames[label.classId].replace(', 1)', ', 0.9)') || 'rgba(255, 255, 68, 0.9)'
+                    backgroundColor: color.replace(', 1)', ', 0.3)'),
+                    borderColor: color.replace(', 1)', ', 0.9)')
                 });
             $(containerId).append(boundingBox);
             return boxId;
@@ -712,31 +715,23 @@
 
             // Remove existing dot if updating
             $(`#${dotId}`).remove();
-            let horiz, vert, hval, vval;
+            let horiz, vert;
             switch (position) {
                 case 0: // top-left
                     horiz = 'left';
                     vert = 'top';
-                    // hval = `-${radius}px`;
-                    // vval = `-${radius}px`;
                     break;
                 case 1: // top-right
                     horiz = 'right';
                     vert = 'top';
-                    // hval = `-${radius}px`;
-                    // vval = `-${radius}px`;
                     break;
                 case 2: // bottom-left
                     horiz = 'left';
                     vert = 'bottom';
-                    // hval = `-${radius}px`;
-                    // vval = `-${radius}px`;
                     break;
                 case 3: // bottom-right
                     horiz = 'right';
                     vert = 'bottom';
-                    // hval = `-${radius}px`;
-                    // vval = `-${radius}px`;
                     break;
             }
             // Create dot element
@@ -756,7 +751,7 @@
         }
 
         // Function to draw marker at specific coordinates with specific size
-        function drawMarker(containerId, position, halfSize, id = null, color = '#ffffff') {
+        function drawMarker(containerId, position, halfSize, id = null, color = 'white') {
             const markerId = id || `marker_${Date.now()}-${Math.random()}`;
 
             // Remove existing marker if updating
@@ -842,14 +837,8 @@
                     originalLabel = { ...currentLabels[selectedLabelIndex] };
                 }
             });
-            markerElem.mouseup((e) => {
-                if (isResizing) {
-                    isResizing = false;
-                    resizeHandle = null;
-                    resizeStartPos = null;
-                    originalLabel = null;
-                }
-            });
+
+            markerElem.mouseup(undoResizing);
             $(containerId).append(markerElem);
             return markerId;
         }
@@ -896,7 +885,6 @@
         }
 
         function writeClassNameCSS(label, isSelected, index, x, y) {
-            console.log(`writeClassNameCSS called`);
             const className = classNames[label.classId] || `Class ${label.classId}`;
             const labelText = `${className} (${index + 1})`;
 
@@ -920,6 +908,10 @@
             cssObj.top = `${((y > rect.height) ? y - (fontSize * 1.9) : y)}px`;
             cssObj.borderRadius = (y > rect.height) ? `${fontSize * 0.5}px ${fontSize * 0.5}px 0px 0px` : `0px 0px ${fontSize * 0.5}px ${fontSize * 0.5}px`;
             classNameSpan.css(cssObj);
+        }
+
+        function drawCrossLines(mouseX, mouseY) {
+
         }
 
         function writeClassName(label, isSelected, index) {
@@ -1025,7 +1017,6 @@
             let y1 = (label.cy - label.h / 2) * canvasHeight;
             let x2 = (label.cx + label.w / 2) * canvasWidth;
             let y2 = (label.cy + label.h / 2) * canvasHeight;
-            console.log('got the handleId:', handleId);
             // Apply resize based on handle
             switch (handleId) {
                 case 'nw':
@@ -1083,16 +1074,15 @@
         }
 
         function drawCurrentBox() {
-            const x = Math.min(startPos.x, currentPos.x);
-            const y = Math.min(startPos.y, currentPos.y);
-            const width = Math.abs(currentPos.x - startPos.x);
-            const height = Math.abs(currentPos.y - startPos.y);
+            const containerWidth = parseFloat($('.bounding-box-container').css('width')) || canvas.offsetWidth;
 
-            ctx.strokeStyle = '#ffff44';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x, y, width, height);
-            ctx.setLineDash([]);
+            const boxContainerToCanvasRatio = containerWidth / canvas.width;
+            const x = Math.min(startPos.x, currentPos.x) * boxContainerToCanvasRatio;
+            const y = Math.min(startPos.y, currentPos.y) * boxContainerToCanvasRatio;
+            const width = Math.abs(currentPos.x - startPos.x) * boxContainerToCanvasRatio;
+            const height = Math.abs(currentPos.y - startPos.y) * boxContainerToCanvasRatio;
+
+            const boxId = drawCSSBox('#canvasLabelBoxContainer', -1, currentLabels.length, x, y, width, height, true);
         }
 
         function updateLabelsList() {
@@ -1314,7 +1304,6 @@
         }
 
         function performMouseMoveBoxMove(mouseX, mouseY) {
-            console.log('performing move box: ');
             const deltaX = (mouseX - moveStartPos.x) / canvas.width;
             const deltaY = (mouseY - moveStartPos.y) / canvas.height;
 
@@ -1346,7 +1335,7 @@
             drawingMode = !drawingMode;
             addLabelBtn.textContent = drawingMode ? 'Cancel' : 'Add Box';
             addLabelBtn.className = drawingMode ? 'danger' : '';
-            canvas.style.cursor = drawingMode ? 'crosshair' : 'default';
+            $('#canvasLabelBoxContainer').css('cursor', drawingMode ? 'crosshair' : 'default');
             controlPanel.classList.toggle('ghosted', drawingMode);
         });
 
@@ -1412,46 +1401,44 @@
             } else {
                 // Check for resize handle first
                 const handle = getResizeHandle(mouseX, mouseY);
-                console.log(`mousedown: subsctring from e.target.id: ${e.target.id.substring(e.target.id.length - 2)}`);
-                console.log(`mousedown: handle from e.target.id: ${getHandleFromDivId(e.target.id.substring(e.target.id.length - 2))}`);
-                console.log(`mousedown: handle being saved: ${handle}`);
                 if (handle && selectedLabelIndex !== -1) {
                     isResizing = true;
                     resizeHandle = handle;
                     resizeStartPos = { x: mouseX, y: mouseY };
                     originalLabel = { ...currentLabels[selectedLabelIndex] };
-                    canvas.style.cursor = getCursorForHandle(handle);
+                    $('#canvasLabelBoxContainer').css('cursor', getCursorForHandle(handle));
                     return;
                 }
-
-                // Select existing label
-                const clickedIndex = findLabelAtPosition(mouseX, mouseY);
-                switch (clickedIndex) {
-                    case -1:
-                        unSelectLabel();
-                        break;
-                    case selectedLabelIndex:
-                        isInMoveBoxMode = true;
-                        moveStartPos = { x: mouseX, y: mouseY };
-                        moveStartLabelCenter = {
-                            cx: currentLabels[selectedLabelIndex].cx,
-                            cy: currentLabels[selectedLabelIndex].cy
-                        };
-                        canvas.style.cursor = 'move';
-                        break;
-                    default:
+                if (e.target.id.search('marker') === -1) { // Not a marker
+                    // Select existing label
+                    const clickedIndex = findLabelAtPosition(mouseX, mouseY);
+                    switch (clickedIndex) {
+                        case -1:
+                            unSelectLabel();
+                            break;
+                        case selectedLabelIndex:
+                            isInMoveBoxMode = true;
+                            moveStartPos = { x: mouseX, y: mouseY };
+                            moveStartLabelCenter = {
+                                cx: currentLabels[selectedLabelIndex].cx,
+                                cy: currentLabels[selectedLabelIndex].cy
+                            };
+                            $('#canvasLabelBoxContainer').css('cursor', 'move');
+                            break;
+                        default:
+                            selectLabel(clickedIndex);
+                            $('#canvasLabelBoxContainer').css('cursor', 'move');
+                            break;
+                    }
+                    if (!canvasClicked) {
+                        // Register first click
+                        canvasClicked = true;
+                    } else {// Double click
                         selectLabel(clickedIndex);
-                        canvas.style.cursor = 'move';
-                        break;
+                        showPopup(clickedIndex);
+                    }
+                    setTimeout(() => canvasClicked = false, 200); // After a while forget the first click
                 }
-                if (!canvasClicked) {
-                    // Register first click
-                    canvasClicked = true;
-                } else {// Double click
-                    selectLabel(clickedIndex);
-                    showPopup(clickedIndex);
-                }
-                setTimeout(() => canvasClicked = false, 200); // After a while forget the first click
             }
         });
 
@@ -1463,9 +1450,6 @@
             if (isResizing && selectedLabelIndex !== -1) {
                 const deltaX = mouseX - resizeStartPos.x;
                 const deltaY = mouseY - resizeStartPos.y;
-                console.log(`mousemove: subsctring from e.target.id: ${e.target.id.substring(e.target.id.length - 2)}`);
-                console.log(`mousemove: handle from e.target.id: ${getHandleFromDivId(e.target.id.substring(e.target.id.length - 2))}`);
-                console.log(`mousemove: handle being saved: ${resizeHandle}`);
 
                 currentLabels[selectedLabelIndex] = resizeLabel(originalLabel, resizeHandle, deltaX, deltaY);
                 updateLabelsList();
@@ -1473,18 +1457,18 @@
                 showDiscardChangesText();
             } else if (isDrawing && drawingMode) {
                 currentPos = { x: mouseX, y: mouseY };
-                drawCurrentBox();
+                setTimeout(drawCurrentBox, 0);
             } else if (isInMoveBoxMode) {
                 performMouseMoveBoxMove(mouseX, mouseY);
             } else if (!drawingMode) {
                 // Update cursor based on what's under the mouse
                 const handle = getResizeHandle(mouseX, mouseY);
                 if (handle && selectedLabelIndex !== -1) {
-                    canvas.style.cursor = getCursorForHandle(handle);
+                    $('#canvasLabelBoxContainer').css('cursor', getCursorForHandle(handle));
                 } else if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
-                    canvas.style.cursor = 'move';
+                    $('#canvasLabelBoxContainer').css('cursor', 'move');
                 } else {
-                    canvas.style.cursor = 'auto';
+                    $('#canvasLabelBoxContainer').css('cursor', 'auto');
                 }
             }
         });
@@ -1495,12 +1479,12 @@
                 resizeHandle = null;
                 resizeStartPos = null;
                 originalLabel = null;
-                canvas.style.cursor = 'auto';
+                $('#canvasLabelBoxContainer').css('cursor', 'auto');
             } else if (isInMoveBoxMode) {
                 isInMoveBoxMode = false;
                 moveStartPos = null;
                 moveStartLabelCenter = null;
-                canvas.style.cursor = 'move';
+                $('#canvasLabelBoxContainer').css('cursor', 'move');
             } else if (isDrawing && drawingMode && startPos && currentPos) {
                 const x = Math.min(startPos.x, currentPos.x);
                 const y = Math.min(startPos.y, currentPos.y);
@@ -1526,7 +1510,7 @@
                 drawingMode = false;
                 addLabelBtn.textContent = 'Add Box';
                 addLabelBtn.className = '';
-                canvas.style.cursor = 'auto';
+                $('#canvasLabelBoxContainer').css('cursor', 'auto');
                 controlPanel.classList.toggle('ghosted', drawingMode);
                 draw();
                 showDiscardChangesText();

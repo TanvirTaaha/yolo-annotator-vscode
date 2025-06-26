@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,11 +21,14 @@
             background: #252526;
             border: 1px solid #444;
             margin: 20px auto;
+            z-index: auto;
         }
 
         /* Bounding box styles */
         .bounding-box {
             position: absolute;
+            left: 0px;
+            top: 0px;
             border: 2px solid;
             box-sizing: border-box;
             pointer-events: none;
@@ -126,6 +130,7 @@
         .controls {
             text-align: center;
             margin: 20px;
+            z-index: auto;
         }
 
         .controls button {
@@ -147,16 +152,54 @@
             color: #cccccc;
             text-align: center;
             margin: 20px;
+            z-index: auto;
+        }
+
+        .boxcontainer {
+            position: fixed;
+            left: 0px;
+            top: 0px;
+            display: block;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            border: 3px solid salmon;
+        }
+        .line {
+            position: fixed;
+            background-color: crimson;
+        }
+
+        .line.visible {
+            display: block;
+        }
+
+        #horizLine {
+            border-top: 2px;
+            border-bottom: 2px;
+            width: 100vw;
+        }
+
+        #vertLine {
+            width: 10px;
+            height: 100vh;
         }
     </style>
 </head>
+
 <body>
     <div class="demo-info">
         <h2 style="color: #00aeff;">CSS Bounding Box & Dots Demo</h2>
         <p>Click buttons to generate dynamic bounding boxes and corner dots</p>
     </div>
 
-    <div class="container" id="container"></div>
+    <div class="container" id="container">
+    </div>
+    <div class="boxcontainer" id="boxcontainer">
+        <div class="line" id="horizLine"></div>
+        <div class="line" id="vertLine"></div>
+    </div>
 
     <div class="controls">
         <button onclick="drawRandomBox()">Add Random Box</button>
@@ -174,10 +217,10 @@
         // Function to draw a bounding box with CSS styling
         function drawBoundingBox(container, x, y, width, height, classType = 'default', isSelected = false, id = null) {
             const boxId = id || `box-${boxCounter++}`;
-            
+
             // Remove existing box if updating
             $(`#${boxId}`).remove();
-            
+
             // Create bounding box element
             const boundingBox = $('<div>')
                 .addClass('bounding-box')
@@ -189,7 +232,7 @@
                     width: `${width}px`,
                     height: `${height}px`
                 });
-            
+
             $(container).append(boundingBox);
             return boxId;
         }
@@ -197,10 +240,10 @@
         // Function to draw dots at specific coordinates with specific radius
         function drawDot(container, x, y, radius = 5, classType = 'default', isSelected = false, id = null) {
             const dotId = id || `dot-${Date.now()}-${Math.random()}`;
-            
+
             // Remove existing dot if updating
             $(`#${dotId}`).remove();
-            
+
             // Create dot element
             const dot = $('<div>')
                 .addClass('dot')
@@ -213,16 +256,42 @@
                     height: `${radius * 2}px`
                 });
             dot.mousedown((e) => {
+                console.log('event:', e);
+                console.log(`event class:${e.target.classList}`);
                 console.log(`mousedown: e.target.id: ${e.target.id}, position:${e.target.id.substring(e.target.id.length - 2)}`);
             });
             $(container).append(dot);
             return dotId;
         }
 
+        $('#boxcontainer').mousedown((e) => {
+            const rect = $('#boxcontainer').get(0).getBoundingClientRect();
+            $('.line')
+                .addClass('visible')
+                .css({
+                    left: e.clientX - rect.left,
+                    top: e.clientY - rect.top
+                });
+        });
+        $('#boxcontainer').mousemove((e) => {
+            const rect = $('#boxcontainer').get(0).getBoundingClientRect();
+            $('.line')
+                .addClass('visible')
+                .css({
+                    left: e.clientX - rect.left,
+                    top: e.clientY - rect.top
+                });
+        });
+        $('#boxcontainer').mouseup((e) => {
+            $('.line')
+                .removeClass('visible')
+        });
+
+
         // Function to draw corner dots for a bounding box
         function drawCornerDots(container, x, y, width, height, radius = 5, classType = 'default', isSelected = false, boxId = null) {
             const baseId = boxId || `corners-${boxCounter}`;
-            
+
             // Draw dots at all four corners
             drawDot(container, x, y, radius, classType, isSelected, `${baseId}-tl`); // Top-left
             drawDot(container, x + width, y, radius, classType, isSelected, `${baseId}-tr`); // Top-right
@@ -234,18 +303,18 @@
         function drawCompleteBoundingBox(container, x, y, width, height, label = '', classType = 'default', isSelected = false) {
             const boxId = `complete-box-${boxCounter}`;
             const fontSize = 14;
-            
+
             // Draw the main bounding box
             drawBoundingBox(container, x, y, width, height, classType, isSelected, boxId);
-            
+
             // Draw corner dots
             drawCornerDots(container, x, y, width, height, 5, classType, isSelected, boxId);
-            
+
             // Draw label if provided
             if (label) {
                 drawLabel(container, x, y, label, fontSize, classType, isSelected, `${boxId}-label`);
             }
-            
+
             boxCounter++;
             return boxId;
         }
@@ -253,10 +322,10 @@
         // Function to draw a text label
         function drawLabel(container, x, y, text, fontSize = 14, classType = 'default', isSelected = false, id = null) {
             const labelId = id || `label-${Date.now()}`;
-            
+
             // Remove existing label if updating
             $(`#${labelId}`).remove();
-            
+
             // Create label element
             const label = $('<div>')
                 .addClass('label-text')
@@ -266,22 +335,22 @@
                 .css({
                     'font-size': `${fontSize}px`
                 });
-            
+
             // Add to container first to calculate dimensions
             $(container).append(label);
-            
+
             // Get dimensions for positioning
             const rect = label.get(0).getBoundingClientRect();
             const labelHeight = rect.height;
-            
+
             // Position label above the box if there's space, otherwise below
             const labelY = y > labelHeight + 5 ? y - labelHeight - 2 : y + labelHeight;
-            
+
             label.css({
                 left: `${x}px`,
                 top: `${labelY}px`
             });
-            
+
             return labelId;
         }
 
@@ -295,7 +364,7 @@
             const classes = ['default', 'class-0', 'class-1', 'class-2'];
             const classType = classes[Math.floor(Math.random() * classes.length)];
             const label = `Box ${boxCounter + 1}`;
-            
+
             drawCompleteBoundingBox(container, x, y, width, height, label, classType, false);
         }
 
@@ -306,7 +375,7 @@
             const width = 100 + Math.random() * 100;
             const height = 80 + Math.random() * 80;
             const label = `Selected ${boxCounter + 1}`;
-            
+
             drawCompleteBoundingBox(container, x, y, width, height, label, 'default', true);
         }
 
@@ -319,7 +388,7 @@
             const classType = `class-${classIndex}`;
             const classNames = ['Red', 'Green', 'Blue'];
             const label = `${classNames[classIndex]} ${boxCounter + 1}`;
-            
+
             drawCompleteBoundingBox(container, x, y, width, height, label, classType, false);
         }
 
@@ -330,13 +399,13 @@
 
         function drawDemoBoxes() {
             clearAll();
-            
+
             // Draw a variety of boxes to show different styles
             drawCompleteBoundingBox('#container', 50, 50, 150, 100, 'Person (1)', 'class-0', false);
             drawCompleteBoundingBox('#container', 250, 80, 120, 80, 'Car (2)', 'class-1', false);
             drawCompleteBoundingBox('#container', 400, 120, 180, 120, 'Selected Box', 'class-2', true);
             drawCompleteBoundingBox('#container', 100, 250, 200, 90, 'Default Box', 'default', false);
-            
+
             // Draw some standalone dots for demonstration
             drawDot('#container', 600, 100, 8, 'class-0', false);
             drawDot('#container', 650, 150, 6, 'class-1', false);
@@ -344,9 +413,10 @@
         }
 
         // Initialize with demo layout
-        $(document).ready(function() {
+        $(document).ready(function () {
             drawDemoBoxes();
         });
     </script>
 </body>
+
 </html>

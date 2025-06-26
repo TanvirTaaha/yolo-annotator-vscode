@@ -390,10 +390,10 @@ class Colors {
 
     public getColors(num_colors: number): string[] {
         if (num_colors > this.colorPallete.length) {
-            let times = Math.ceil(this.colorPallete.length / num_colors);
+            let times = Math.ceil(num_colors / this.colorPallete.length);
             let color_array: string[] = [];
             while (times--) {
-                color_array.concat(this.colorPallete);
+                color_array = color_array.concat(this.colorPallete);
                 this.shuffleColors();
             }
             return color_array.slice(0, num_colors);
