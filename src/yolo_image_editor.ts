@@ -78,27 +78,20 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     }
 
     private async loadCalsses(uri: vscode.Uri) {
-        console.log('loadCalsses called: uri:', uri);
         this.classesPath = path.join(path.dirname(uri.fsPath), 'classes.txt');
-        console.log(`this.classesPath-1: ${this.classesPath}`);
         if (!fs.existsSync(this.classesPath)) {
             this.classesPath = this.classesPath.replace(/[\/|\\]images[\/|\\].*$/gim, path.sep + 'classes.txt');
-            console.log(`this.classesPath-5: ${this.classesPath}`);
             if (!fs.existsSync(this.classesPath)) {
                 this.classesPath = this.classesPath.replace('classes.txt', 'images' + path.sep + 'classes.txt');
-                console.log(`this.classesPath-6: ${this.classesPath}`);
                 if (!fs.existsSync(this.classesPath)) {
                     console.error("Can't find classes.txt");
                     this.notifyAndCreateClassesTxtFile(this.classesPath);
                     return;
                 } else {
                     this.classesPath = this.classesPath.replace('classes.txt', 'labels' + path.sep + 'classes.txt');
-                    console.log(`this.classesPath-2: ${this.classesPath}`);
                 }
             }
-            console.log(`this.classesPath-3: ${this.classesPath}`);
         }
-        console.log(`this.classesPath-4: ${this.classesPath}`);
         try {
             this.classes = fs.readFileSync(this.classesPath, 'utf8').split('\n').filter(line => line.trim());
             this.classColors = new Colors().getColors(this.classes.length);

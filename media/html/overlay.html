@@ -1428,7 +1428,6 @@
 
         var reloadBtnClicked = false;
         $("#reloadBtn").mouseup(() => {
-            console.log('Reload button clicked');
             if (!reloadBtnClicked) {
                 reloadBtnClicked = true;
                 vscode.postMessage({
@@ -1464,7 +1463,6 @@
         });
 
         prevBtn.addEventListener('click', () => {
-            console.log('prevBtn clicked, currentImageInfo:', currentImageInfo, `length: ${imageAndLabelBatchBuffer.batch.length}`);
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
@@ -1482,7 +1480,6 @@
         });
 
         nextBtn.addEventListener('click', () => {
-            console.log('nextBtn clicked, currentImageInfo:', currentImageInfo);
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
