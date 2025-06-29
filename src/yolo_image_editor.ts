@@ -13,6 +13,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     private classes = new Array<string>();
     private stopWorking = false;
     private classColors: string[] = [];
+    private messageHandlerDisposable?: vscode.Disposable;
 
     constructor(private readonly context: vscode.ExtensionContext) { }
 
@@ -45,6 +46,10 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         webviewPanel: vscode.WebviewPanel,
         token: vscode.CancellationToken
     ): Promise<void> {
+        await this.loadDocument(document, webviewPanel);
+    }
+
+    private async loadDocument(document: YOLOImageDocument, webviewPanel: vscode.WebviewPanel) {
         // Set up the webview with minimal overlay UI
         webviewPanel.webview.options = {
             enableScripts: true,
@@ -67,12 +72,13 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         this.loadCalsses(document.uri);
         // Create the overlay UI
         webviewPanel.webview.html = this.getOverlayHTML(webviewPanel.webview, this.context.extensionPath, document.uri);
-
+        webviewPanel.title = path.basename(document.uri.fsPath);
         // Set up message handling
         this.setupMessageHandling(webviewPanel, document);
     }
 
     private async loadCalsses(uri: vscode.Uri) {
+        console.log('loadCalsses called: uri:', uri);
         this.classesPath = path.join(path.dirname(uri.fsPath), 'classes.txt');
         console.log(`this.classesPath-1: ${this.classesPath}`);
         if (!fs.existsSync(this.classesPath)) {
@@ -237,6 +243,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
             for (const batchElem of buffer.batch.values()) {
                 if (this.stopWorking) { return; }
+                console.log(`Sending image at index:${batchElem.info.index}, stopWorking:${this.stopWorking}`);
                 webview.postMessage({
                     command: 'updateImageAndLabelBuffer',
                     batchElement: batchElem,
@@ -252,21 +259,18 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
     private async reloadWithDifferentDocument(webviewPanel: vscode.WebviewPanel, newDocumentPath: string): Promise<void> {
         try {
-            // Get the new document URI
             const newUri = vscode.Uri.file(newDocumentPath);
-
-            // Check if the file exists
             if (!fs.existsSync(newDocumentPath)) {
                 vscode.window.showErrorMessage(`File not found: ${newDocumentPath}`);
                 return;
             }
-            this.stopWorking = true; // Stop any ongoing operations
-            console.log('Stop flag for stopping transaction');
-            // Close the current editor panel
-            webviewPanel.dispose();
 
-            // Open the new document with the same custom editor
+            this.stopWorking = true;
+            webviewPanel.dispose();
+            this.dispose();
             await vscode.commands.executeCommand('vscode.openWith', newUri, 'yolo-annotator.imageEditor');
+            
+            this.stopWorking = false;
 
         } catch (error) {
             console.error('Failed to reload with different document:', error);
@@ -275,7 +279,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     }
 
     private async setupMessageHandling(webviewPanel: vscode.WebviewPanel, document: YOLOImageDocument): Promise<void> {
-        webviewPanel.webview.onDidReceiveMessage(async (message) => {
+        this.messageHandlerDisposable = webviewPanel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'giveMeSettings':
                     webviewPanel.webview.postMessage({
@@ -374,7 +378,12 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
                 case 'reloadWindow':
                     this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
+                    console.log(`reload req with message.index: ${message.currentImageIndex}, preloadedCurrentIndex: ${this.imagePreloader?.getCurrentIndex()},  imageInfo:`, this.imagePreloader?.getCurrentImageInfo(), this.imagePreloader?.getImageInfo(message.currentImageIndex));
                     await this.reloadWithDifferentDocument(webviewPanel, this.imagePreloader?.getCurrentImagePath() || document.uri.fsPath);
+                    break;
+
+                case 'updateIndicies':
+                    this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
                     break;
             }
         });
@@ -387,6 +396,12 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
         return text;
+    }
+
+    dispose() {
+        if (this.messageHandlerDisposable) {
+            this.messageHandlerDisposable.dispose();
+        }
     }
 }
 
@@ -406,15 +421,15 @@ class Colors {
         "rgba(115, 210, 222, 1)",
         "rgba(60, 39, 108, 1)",
         "rgba(17, 230, 216, 1)",
-        "rgba(33, 131, 128, 1)",
+        "rgba(51, 102, 131, 1)",
         "rgba(90, 24, 144, 1)",
+        "rgba(33, 131, 128, 1)",
+        "rgba(25, 37, 173, 1)",
         "rgba(61, 110, 118, 1)",
         "rgba(74, 171, 175, 1)",
-        "rgba(25, 37, 173, 1)",
         "rgba(157, 78, 221, 1)",
         "rgba(88, 88, 107, 1)",
         "rgba(26, 75, 102, 1)",
-        "rgba(51, 102, 131, 1)",
         "rgba(102, 155, 188, 1)",
         "rgba(255, 109, 0, 1)",
         "rgba(255, 133, 0, 1)",

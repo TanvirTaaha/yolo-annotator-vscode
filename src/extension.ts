@@ -100,33 +100,6 @@ export function activate(context: vscode.ExtensionContext) {
         startCommand,
         setAsDefaultCommand
     );
-
-    // Show getting started message
-    // Show getting started message only if no YOLO editor is already open
-    // const isYOLOEditorOpen = vscode.window.tabGroups.all
-    //     .flatMap(group => group.tabs)
-    //     .some(tab => tab.input && 
-    //           typeof tab.input === 'object' &&
-    //           tab.input !== null &&
-    //           'viewType' in tab.input && 
-    //           (tab.input as any).viewType === 'yolo-annotator.imageEditor');
-
-    // if (!isYOLOEditorOpen) {
-    //     vscode.window.showInformationMessage(
-    //         'YOLO Annotator activated! Right-click on an image file to "Open with YOLO Annotator"',
-    //         'Open Image',
-    //         'Set as Default'
-    //     ).then(selection => {
-    //         switch (selection) {
-    //             case 'Open Image':
-    //                 vscode.commands.executeCommand('yolo-annotator.openWithAnnotator');
-    //                 break;
-    //             case 'Set as Default':
-    //                 vscode.commands.executeCommand('yolo-annotator.setAsDefault');
-    //                 break;
-    //         }
-    //     });
-    // }
 }
 
 export function deactivate() {

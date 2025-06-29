@@ -134,7 +134,7 @@ export class ImagePreloader {
     }
 
     // Get current image info
-    public getCurrentImageInfo(): { path: string; index: number; total: number; filename: string } {
+    public getCurrentImageInfo(): ImageInfo {
         return this.getImageInfo(this.currentIndex);
     }
 

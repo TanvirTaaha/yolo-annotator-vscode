@@ -1242,6 +1242,7 @@
             imageNameField.textContent = `${batchElem.info.filename}`;
             // update info
             currentImageInfo = batchElem.info;
+            vscode.postMessage({ command: 'updateIndicies', currentImageIndex: currentImageInfo.index });
             initializeDrawingStateVariables();
             setTimeout(() => {
                 // draw image and info
@@ -1425,11 +1426,18 @@
             collapseBtn.textContent = controlPanel.classList.contains('collapsed') ? '+' : '−';
         });
 
-        $("#reloadBtn").click(() => {
-            vscode.postMessage({
-                command: 'reloadWindow',
-                currentImageIndex: currentImageInfo.index
-            });
+        var reloadBtnClicked = false;
+        $("#reloadBtn").mouseup(() => {
+            console.log('Reload button clicked');
+            if (!reloadBtnClicked) {
+                reloadBtnClicked = true;
+                vscode.postMessage({
+                    command: 'reloadWindow',
+                    currentImageIndex: currentImageInfo.index
+                });
+            } else {
+                setTimeout(reloadBtnClicked = false, 50);
+            }
         });
 
         addLabelBtn.addEventListener('click', () => {
@@ -1456,6 +1464,7 @@
         });
 
         prevBtn.addEventListener('click', () => {
+            console.log('prevBtn clicked, currentImageInfo:', currentImageInfo, `length: ${imageAndLabelBatchBuffer.batch.length}`);
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
@@ -1473,6 +1482,7 @@
         });
 
         nextBtn.addEventListener('click', () => {
+            console.log('nextBtn clicked, currentImageInfo:', currentImageInfo);
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
@@ -1504,16 +1514,6 @@
                 startPos = { x: mouseX, y: mouseY };
                 currentPos = startPos;
             } else {
-                // Check for resize handle first
-                const handle = getResizeHandle(mouseX, mouseY);
-                if (handle && selectedLabelIndex !== -1) {
-                    isResizing = true;
-                    resizeHandle = handle;
-                    resizeStartPos = { x: mouseX, y: mouseY };
-                    originalLabel = { ...currentLabels[selectedLabelIndex] };
-                    $('#canvasLabelBoxContainer').css('cursor', getCursorForHandle(handle));
-                    return;
-                }
                 if (e.target.id.search('marker') === -1) { // Not a marker
                     // Select existing label
                     const clickedIndex = findLabelAtPosition(mouseX, mouseY);
@@ -1566,11 +1566,7 @@
             } else if (isInMoveBoxMode) {
                 performMouseMoveBoxMove(mouseX, mouseY);
             } else if (!drawingMode) {
-                // Update cursor based on what's under the mouse
-                const handle = getResizeHandle(mouseX, mouseY);
-                if (handle && selectedLabelIndex !== -1) {
-                    $('#canvasLabelBoxContainer').css('cursor', getCursorForHandle(handle));
-                } else if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
+                if (selectedLabelIndex !== -1 && findLabelAtPosition(mouseX, mouseY) === selectedLabelIndex) {
                     $('#canvasLabelBoxContainer').css('cursor', 'move');
                 } else {
                     $('#canvasLabelBoxContainer').css('cursor', 'auto');
