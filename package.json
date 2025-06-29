@@ -108,13 +108,6 @@
       }
     ],
     "menus": {
-      "explorer/context": [
-        {
-          "command": "yolo-annotator.openWithAnnotator",
-          "when": "resourceExtname =~ /\\.(jpg|jpeg|png|JPG|JPEG|PNG)$/",
-          "group": "navigation"
-        }
-      ],
       "editor/title": [
         {
           "command": "yolo-annotator.openWithAnnotator",

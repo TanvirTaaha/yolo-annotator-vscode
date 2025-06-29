@@ -43,10 +43,28 @@
             height: 100%;
             top: 0;
         }
+
+        button {
+            z-index: auto;
+        }
+
+        .test-contrast {
+            z-index: auto;
+            font-size: 300px;
+            color: gray;
+            mix-blend-mode: difference;
+        }
+
+        body {
+            background-color: green;
+        }
     </style>
 </head>
 
 <body>
+    <div class="test-contrast">TEST</div>
+
+
     <div class="mouse-line" id="horizontalLine"></div>
     <div class="mouse-line" id="verticalLine"></div>
     <button id="show">Show Lines</button>
@@ -68,7 +86,7 @@
             // The left of the vertical line should be at the mouse's X position
             verticalLine.style.left = mouseX + 'px';
         });
-        document.getElementById('show').addEventListener('click', (e)=> {
+        document.getElementById('show').addEventListener('click', (e) => {
             $('.mouse-line').toggleClass('visible');
         });
     </script>

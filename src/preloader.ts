@@ -374,7 +374,7 @@ export class ImagePreloader {
     }
 
     // EXACT SAME BEHAVIOR - returns boolean
-    public async saveLabelsForImage(imageFilename: string, labels: any[]): Promise<boolean> {
+    public async saveLabelsForImage(imageFilename: string, labels: any[]): Promise<{ result: Boolean, cacheItem: CacheItem | undefined }> {
         try {
             const imagePath = this.imageFiles.find((p) => path.basename(p) === imageFilename) || '';
             const labelPath = this.getLabelsPath(imagePath);
@@ -398,13 +398,12 @@ export class ImagePreloader {
                 cachedItem.labelsMtime = await this.getFileModTime(labelPath);
             }
 
-            return true;
+            return { result: true, cacheItem: cachedItem };
         } catch (error) {
-            return false;
+            return { result: false, cacheItem: undefined };
         }
     }
 
-    // EXACT SAME BEHAVIOR - maintains the same return structure and logic  
     public async getImageAndLabelBatchAroundCurrent(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
         const batch: Map<number, BatchElement> = new Map();
         this.cache.map((cacheItem) => {

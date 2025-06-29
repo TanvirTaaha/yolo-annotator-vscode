@@ -4,6 +4,7 @@ import * as fs from 'fs';
 
 import * as preloader from './preloader';
 import { SettingsManager } from './settings_manager';
+import { Console } from 'console';
 
 // Custom Editor Provider for Image Annotation
 export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvider {
@@ -73,25 +74,31 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
     private async loadCalsses(uri: vscode.Uri) {
         this.classesPath = path.join(path.dirname(uri.fsPath), 'classes.txt');
+        console.log(`this.classesPath-1: ${this.classesPath}`);
         if (!fs.existsSync(this.classesPath)) {
-            this.classesPath = uri.fsPath.replace(/[\/|\\]images[\/|\\].*$/gim, path.sep + 'classes.txt');
+            this.classesPath = this.classesPath.replace(/[\/|\\]images[\/|\\].*$/gim, path.sep + 'classes.txt');
+            console.log(`this.classesPath-5: ${this.classesPath}`);
             if (!fs.existsSync(this.classesPath)) {
                 this.classesPath = this.classesPath.replace('classes.txt', 'images' + path.sep + 'classes.txt');
+                console.log(`this.classesPath-6: ${this.classesPath}`);
                 if (!fs.existsSync(this.classesPath)) {
                     console.error("Can't find classes.txt");
-                    vscode.window.showErrorMessage("Failed to load the classes.txt file. Please put it in the parent directory or images/labels folder.");
+                    this.notifyAndCreateClassesTxtFile(this.classesPath);
                     return;
                 } else {
                     this.classesPath = this.classesPath.replace('classes.txt', 'labels' + path.sep + 'classes.txt');
+                    console.log(`this.classesPath-2: ${this.classesPath}`);
                 }
             }
+            console.log(`this.classesPath-3: ${this.classesPath}`);
         }
+        console.log(`this.classesPath-4: ${this.classesPath}`);
         try {
             this.classes = fs.readFileSync(this.classesPath, 'utf8').split('\n').filter(line => line.trim());
             this.classColors = new Colors().getColors(this.classes.length);
         } catch (error) {
             console.error("Can't find classes.txt");
-            vscode.window.showErrorMessage("Failed to load the classes.txt file. Please put it in the parent directory or images/labels folder.");
+            this.notifyAndCreateClassesTxtFile(this.classesPath);
         }
     }
 
@@ -120,7 +127,42 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         return "<h1>Error loading editor</h1>";
     }
 
-    private async showClassInputPrompt(webview: vscode.Webview, labelIndex: number, prevClassIndex: number) {
+    private async notifyAndCreateClassesTxtFile(classesFilePath: string) {
+        try {
+            console.log('notifyAndCreateClassesTxtFile called with:', classesFilePath);
+            classesFilePath = classesFilePath.split(path.sep).filter(part => (part !== 'images' && part !== 'labels')).join(path.sep);
+            console.log('notifyAndCreateClassesTxtFile called with after filter:', classesFilePath);
+
+            const fileUri = vscode.Uri.file(classesFilePath);
+            const userChoice = await vscode.window.showInformationMessage(
+                `"classes.txt" file not found near the image. Do you want to create one?`,
+                'Create'
+            );
+
+            if (userChoice === 'Create') {
+                try {
+                    await vscode.workspace.fs.writeFile(fileUri, Buffer.from('', 'utf8'));
+                    vscode.window.showInformationMessage(`File "classes.txt" created successfully at "${classesFilePath}".\nPopulate it with class names in seperate lines.`);
+                    // Open the file in a new tab (non-preview mode)
+                    const document = await vscode.workspace.openTextDocument(fileUri);
+                    await vscode.window.showTextDocument(document, {
+                        preview: false, // Opens as a regular tab, not a temporary preview
+                        viewColumn: vscode.ViewColumn.Active // Opens in the active editor group
+                    });
+                } catch (error) {
+                    const errorMessage = (error instanceof Error) ? error.message : String(error);
+                    vscode.window.showErrorMessage(`Failed to create or open "classes.txt" file: ${errorMessage}`);
+                    console.error('Error creating/opening classes.txt file:', error);
+                }
+            }
+        } catch (error) {
+            const errorMessage = (error instanceof Error) ? error.message : String(error);
+            vscode.window.showErrorMessage(`An unexpected error occurred in creating classes.txt: ${errorMessage}`);
+            console.error('Unexpected error in creating classes.txt:', errorMessage);
+        }
+    }
+
+    private async showClassInputPromptToBox(webview: vscode.Webview, labelIndex: number, prevClassIndex: number) {
         if (!this.classes || this.classes.length === 0) {
             vscode.window.showErrorMessage("Class list is empty or not loaded.");
             return;
@@ -219,6 +261,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 return;
             }
             this.stopWorking = true; // Stop any ongoing operations
+            console.log('Stop flag for stopping transaction');
             // Close the current editor panel
             webviewPanel.dispose();
 
@@ -252,11 +295,26 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'saveLabels':
-                    const result = await this.imagePreloader?.saveLabelsForImage(message.imageFilename, message.newLabels) || false;
+                    const result = await this.imagePreloader?.saveLabelsForImage(message.imageFilename, message.newLabels) || { result: false, cacheItem: null };
                     webviewPanel.webview.postMessage({
                         command: 'afterSave',
-                        result: result
+                        result: result.result
                     });
+                    if (result.result) {
+                        const currentBatchElem = {
+                            imageSource: result.cacheItem?.base64Data,
+                            labels: result.cacheItem?.labels,
+                            info: typeof result.cacheItem?.imageIndex === 'number'
+                                ? this.imagePreloader?.getImageInfo(result.cacheItem.imageIndex)
+                                : undefined
+                        };
+                        webviewPanel.webview.postMessage({
+                            command: 'updateImageAndLabelBuffer',
+                            batchElement: currentBatchElem,
+                            classes: this.classes,
+                            classColors: this.classColors
+                        });
+                    }
                     break;
 
                 case 'getCurrentImage':
@@ -303,7 +361,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     break;
 
                 case 'editClassOfLabel':
-                    this.showClassInputPrompt(webviewPanel.webview, message.labelIndex, message.prevClassIndex);
+                    this.showClassInputPromptToBox(webviewPanel.webview, message.labelIndex, message.prevClassIndex);
                     break;
 
                 case 'showDiscardChangesChoice':
