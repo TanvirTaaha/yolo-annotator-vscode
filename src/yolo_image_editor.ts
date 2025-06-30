@@ -263,15 +263,13 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
             this.stopWorking = true;
             webviewPanel.dispose();
-            await vscode.commands.executeCommand('vscode.openWith', newUri, 'yolo-annotator.imageEditor');
-
+            this.dispose();
+            await vscode.commands.executeCommand('yolo-annotator.openWithAnnotator', newUri);
             this.stopWorking = false;
 
         } catch (error) {
             console.error('Failed to reload with different document:', error);
             vscode.window.showErrorMessage(`Failed to reload editor: ${error}`);
-        } finally {
-            this.dispose();
         }
     }
 
