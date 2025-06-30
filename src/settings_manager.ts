@@ -49,6 +49,10 @@ export class SettingsManager {
     static getFontSize(): number {
         return this.getConfig('ui.fontSize', 16);
     }
+
+    static getMaxUndoLength(): number {
+        return this.getConfig('ui.maxUndoLength', 50);
+    }
     /**
      * Get all settings as an object
      */
@@ -61,7 +65,8 @@ export class SettingsManager {
             },
             ui: {
                 showShortcutsHelp: this.getShowShortcutsHelp(),
-                fontSize: this.getFontSize()
+                fontSize: this.getFontSize(),
+                maxUndoLength: this.getMaxUndoLength()
             }
         };
     }

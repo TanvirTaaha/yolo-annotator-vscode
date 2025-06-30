@@ -85,6 +85,14 @@
           "maximum": 32,
           "description": "Font size of class names on top of bounding box",
           "scope": "resource"
+        },
+        "yoloAnnotator.ui.maxUndoLength": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "maximum": 500,
+          "description": "Maximum length of states to store for undo/redo",
+          "scope": "resource"
         }
       }
     },

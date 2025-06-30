@@ -539,6 +539,10 @@
         const zoomOutBtn = document.getElementById('zoomOutBtn');
         const zoomLevelDisplay = document.getElementById('zoomLevel');
 
+        // Undo States
+        let undoStates = [];
+        let undoIndex = -1;
+        let maxUndoLength = Number(`${maxUndoLength}`);
 
         // State
         let imageAndLabelBatchBuffer = {};
@@ -566,12 +570,13 @@
         let originalLabel = null;
         const handleSize = 10;
         const newClassColor = 'rgba(255, 255, 68, 1)';
-        const undoResizing = (e) => {
+        const unsetResizing = (e) => {
             if (isResizing) {
                 isResizing = false;
                 resizeHandle = null;
                 resizeStartPos = null;
                 originalLabel = null;
+                pushUndoState({ labels: currentLabels, saved: false });
             }
         };
 
@@ -593,6 +598,10 @@
         imageelem.onload = draw;
 
         function initializeDrawingStateVariables() {
+            undoStates = [];
+            undoIndex = -1;
+            maxUndoLength = settings ? settings.ui.maxUndoLength : maxUndoLength;
+
             isDrawing = false;
             drawingMode = false;
             startPos = null;
@@ -669,10 +678,8 @@
                 'user-select': 'none'
             });
 
-            $('#canvasLabelBoxContainer').mouseup(undoResizing);
-            $('#canvasLabelBoxContainer').mouseleave((e) => {
-                undoResizing();
-            });
+            $('#canvasLabelBoxContainer').mouseup(unsetResizing);
+            $('#canvasLabelBoxContainer').mouseleave(unsetResizing);
             $('#canvasLabelBoxContainer').mousemove((e) => {
                 if (drawingMode) {
                     $('#horizontalLine').css('top', `${e.clientY}px`);
@@ -871,7 +878,7 @@
                 }
             });
 
-            markerElem.mouseup(undoResizing);
+            markerElem.mouseup(unsetResizing);
             $(containerId).append(markerElem);
             return markerId;
         }
@@ -1116,7 +1123,7 @@
             const width = Math.abs(currentPos.x - startPos.x) * boxContainerToCanvasRatio;
             const height = Math.abs(currentPos.y - startPos.y) * boxContainerToCanvasRatio;
 
-            const boxId = drawCSSBox('#canvasLabelBoxContainer', -1, currentLabels.length, x, y, width, height, true);
+            drawCSSBox('#canvasLabelBoxContainer', -1, currentLabels.length, x, y, width, height, true);
         }
 
         function updateLabelsList() {
@@ -1187,9 +1194,8 @@
         function deleteLabel(index) {
             if (index < 0 || index >= currentLabels.length) return;
             currentLabels.splice(index, 1);
-            if (selectedLabelIndex >= index) {
-                selectedLabelIndex = selectedLabelIndex > 0 ? selectedLabelIndex - 1 : -1;
-            }
+            pushUndoState({ labels: currentLabels, saved: false });
+            selectedLabelIndex = -1;
             showDiscardChangesText();
             showStatus('Label deleted', false);
         }
@@ -1250,6 +1256,7 @@
             }, 50);
             // update labels
             processLables(batchElem.labels, imageAndLabelBatchBuffer.classes, imageAndLabelBatchBuffer.classColors);
+            pushUndoState({ labels: currentLabels, saved: true });
         }
 
         function clearAroundCurrentImage() {
@@ -1419,6 +1426,30 @@
             return luminance > 0.5;
         }
 
+        function pushUndoState(state) {
+            undoStates.splice(Math.min(undoStates.length, ++undoIndex));
+            undoStates.push(JSON.parse(JSON.stringify(state)));
+        }
+
+        function undo() {
+            if (undoIndex <= 0 || undoStates.length === 0) return;
+            setUndoRedoState(undoStates[--undoIndex]);
+        }
+
+        function redo() {
+            if (undoIndex >= undoStates.length - 1) return;
+            setUndoRedoState(undoStates[++undoIndex]);
+        }
+
+        function setUndoRedoState(state) {
+            // Deep clone the labels to avoid reference issues
+            currentLabels = JSON.parse(JSON.stringify(state.labels));
+            selectedLabelIndex = -1;
+            updateLabelsList();
+            redrawAnnotations();
+            (state.saved) ? hideDiscardChangesText() : showDiscardChangesText();
+        }
+
         // Event Listeners
         // Panel collapse/expand
         collapseBtn.addEventListener('click', () => {
@@ -1449,6 +1480,10 @@
         });
 
         saveBtn.addEventListener('click', () => {
+            if (currentLabels.findIndex((label) => label.classId === -1) !== -1) {
+                showStatus('Check class of all the boxes', true);
+                return;
+            }
             vscode.postMessage({
                 command: 'saveLabels',
                 imageFilename: currentImageInfo.filename,
@@ -1572,17 +1607,12 @@
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (isResizing) {
-                isResizing = false;
-                resizeHandle = null;
-                resizeStartPos = null;
-                originalLabel = null;
-                $('#canvasLabelBoxContainer').css('cursor', 'auto');
-            } else if (isInMoveBoxMode) {
+            unsetResizing();
+            if (isInMoveBoxMode) {
                 isInMoveBoxMode = false;
                 moveStartPos = null;
                 moveStartLabelCenter = null;
-                $('#canvasLabelBoxContainer').css('cursor', 'move');
+                pushUndoState({ labels: currentLabels, saved: false });
             } else if (isDrawing && drawingMode && startPos && currentPos) {
                 const x = Math.min(startPos.x, currentPos.x);
                 const y = Math.min(startPos.y, currentPos.y);
@@ -1599,6 +1629,7 @@
                     };
 
                     currentLabels.push(label);
+                    pushUndoState({ labels: currentLabels, saved: false });
                     selectedLabelIndex = currentLabels.length - 1;
                     updateLabelsList();
                     showPopup(currentLabels.length - 1);
@@ -1709,6 +1740,19 @@
                         unSelectLabel();
                     }
                     break;
+                case 'z':
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        undo();
+                    }
+                    break;
+                case 'y': // Alternate redo shortcut
+                case 'Z': // Shift+Z
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        redo();
+                    }
+                    break;
             }
         });
 
@@ -1745,6 +1789,7 @@
                             selectedLabelIndex = -1;
                         }
                         currentLabels[message.labelIndex].classId = selectedClassIndex;
+                        pushUndoState({ labels: currentLabels, saved: false });
                         showDiscardChangesText();
                         updateLabelsList();
                         draw();
@@ -1763,6 +1808,7 @@
                     setTimeout(draw, 50);
                     // Process Labels
                     processLables(message.labels, message.classes, message.classColors);
+                    pushUndoState({ labels: currentLabels, saved: true });
                     break;
 
                 case 'updateImageAndLabelBuffer':
@@ -1798,7 +1844,7 @@
                     if (message.result) {
                         hideDiscardChangesText();
                         showStatus("Saving success.", false);
-                        initializeDrawingStateVariables();
+                        undoStates[undoStates.length - 1].saved = true;
                     } else {
                         showStatus("Error saving.", true);
                     }
@@ -1812,6 +1858,7 @@
                                 command: 'loadLabels',
                                 currentImageIndex: currentImageInfo.index
                             });
+                            pushUndoState({ labels: currentLabels, saved: true });
                             showStatus("Discarded.", true);
                             break;
                         case 'save':

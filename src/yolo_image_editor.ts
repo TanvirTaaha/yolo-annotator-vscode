@@ -46,6 +46,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         webviewPanel: vscode.WebviewPanel,
         token: vscode.CancellationToken
     ): Promise<void> {
+        console.log('resolveCustomEditor is called:', document.uri);
         await this.loadDocument(document, webviewPanel);
     }
 
@@ -105,6 +106,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         const nonce = this.getNonce();
         const imageWebviewUri = webview.asWebviewUri(imageUri);
         const showShortcutsHelp = SettingsManager.getShowShortcutsHelp();
+        const maxUndoLength = SettingsManager.getMaxUndoLength();
 
         try {
             // Path to your HTML file
@@ -115,6 +117,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
             htmlContent = htmlContent.replace(/\$\{nonce\}/g, nonce);
             // htmlContent = htmlContent.replace(/\$\{imageWebviewUri\}/g, imageWebviewUri.toString());
             htmlContent = htmlContent.replace(/\$\{showShortcutsHelp\}/g, showShortcutsHelp ? 'show' : 'hide');
+            htmlContent = htmlContent.replace(/\$\{maxUndoLength\}/g, maxUndoLength.toString());
             htmlContent = htmlContent.replace(/\$\{webview.cspSource\}/g, webview.cspSource);
 
             return htmlContent;
@@ -260,14 +263,15 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
             this.stopWorking = true;
             webviewPanel.dispose();
-            this.dispose();
             await vscode.commands.executeCommand('vscode.openWith', newUri, 'yolo-annotator.imageEditor');
-            
+
             this.stopWorking = false;
 
         } catch (error) {
             console.error('Failed to reload with different document:', error);
             vscode.window.showErrorMessage(`Failed to reload editor: ${error}`);
+        } finally {
+            this.dispose();
         }
     }
 
