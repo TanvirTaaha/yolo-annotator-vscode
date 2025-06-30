@@ -88,8 +88,8 @@ class_id center_x center_y width height
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE.txt) file for details.
 
 ## Support
 
-Report issues at: [https://github.com/TanvirTaaha/yolo-annotator-vscode/issues]("https://github.com/TanvirTaaha/yolo-annotator-vscode/issues")
+Report issues at: [https://github.com/TanvirTaaha/yolo-annotator-vscode/issues](https://github.com/TanvirTaaha/yolo-annotator-vscode/issues)
