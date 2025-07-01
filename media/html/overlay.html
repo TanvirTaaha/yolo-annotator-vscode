@@ -1431,9 +1431,13 @@
             return luminance > 0.5;
         }
 
+        function deepCopyObj(obj) {
+            return JSON.parse(JSON.stringify(obj));
+        }
+
         function pushUndoState(state) {
             undoStates.splice(Math.min(undoStates.length, ++undoIndex));
-            undoStates.push(JSON.parse(JSON.stringify(state)));
+            undoStates.push(deepCopyObj(state));
         }
 
         function undo() {
@@ -1448,7 +1452,7 @@
 
         function setUndoRedoState(state) {
             // Deep clone the labels to avoid reference issues
-            currentLabels = JSON.parse(JSON.stringify(state.labels));
+            currentLabels = deepCopyObj(state.labels);
             selectedLabelIndex = -1;
             updateLabelsList();
             redrawAnnotations();
@@ -1470,7 +1474,7 @@
 
         function cutLabel() {
             if (selectedLabelIndex !== -1) {
-                copiedLabel = currentLabels.splice(selectedLabelIndex, 1);
+                copiedLabel = deepCopyObj(currentLabels.splice(selectedLabelIndex, 1)[0]);
                 selectedLabelIndex = -1;
                 updateLabelsList();
                 redrawAnnotations();
@@ -1482,7 +1486,7 @@
 
         function copyLabel() {
             if (selectedLabelIndex !== -1) {
-                copiedLabel = JSON.parse(JSON.stringify(currentLabels[selectedLabelIndex]));
+                copiedLabel = deepCopyObj(currentLabels[selectedLabelIndex]);
                 showStatus('Copied', false, 500);
             }
         }
@@ -1491,7 +1495,7 @@
             if (copiedLabel) {
                 copiedLabel.cx = Math.min(1 - copiedLabel.w / 2, Math.max(pasteLabelMousePos.x / canvas.width, copiedLabel.w / 2));
                 copiedLabel.cy = Math.min(1 - copiedLabel.h / 2, Math.max(pasteLabelMousePos.y / canvas.height, copiedLabel.h / 2));
-                currentLabels.push(JSON.parse(JSON.stringify(copiedLabel)));
+                currentLabels.push(deepCopyObj(copiedLabel));
                 selectedLabelIndex = -1;
                 updateLabelsList();
                 redrawAnnotations();
