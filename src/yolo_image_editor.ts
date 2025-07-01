@@ -46,7 +46,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         webviewPanel: vscode.WebviewPanel,
         token: vscode.CancellationToken
     ): Promise<void> {
-        console.log('resolveCustomEditor is called:', document.uri);
         await this.loadDocument(document, webviewPanel);
     }
 
@@ -131,10 +130,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
     private async notifyAndCreateClassesTxtFile(classesFilePath: string) {
         try {
-            console.log('notifyAndCreateClassesTxtFile called with:', classesFilePath);
             classesFilePath = classesFilePath.split(path.sep).filter(part => (part !== 'images' && part !== 'labels')).join(path.sep);
-            console.log('notifyAndCreateClassesTxtFile called with after filter:', classesFilePath);
-
+            
             const fileUri = vscode.Uri.file(classesFilePath);
             const userChoice = await vscode.window.showInformationMessage(
                 `"classes.txt" file not found near the image. Do you want to create one?`,
@@ -239,7 +236,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
             for (const batchElem of buffer.batch.values()) {
                 if (this.stopWorking) { return; }
-                console.log(`Sending image at index:${batchElem.info.index}, stopWorking:${this.stopWorking}`);
                 webview.postMessage({
                     command: 'updateImageAndLabelBuffer',
                     batchElement: batchElem,
@@ -373,7 +369,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
 
                 case 'reloadWindow':
                     this.imagePreloader?.setCurrentIndex(message.currentImageIndex);
-                    console.log(`reload req with message.index: ${message.currentImageIndex}, preloadedCurrentIndex: ${this.imagePreloader?.getCurrentIndex()},  imageInfo:`, this.imagePreloader?.getCurrentImageInfo(), this.imagePreloader?.getImageInfo(message.currentImageIndex));
                     await this.reloadWithDifferentDocument(webviewPanel, this.imagePreloader?.getCurrentImagePath() || document.uri.fsPath);
                     break;
 
