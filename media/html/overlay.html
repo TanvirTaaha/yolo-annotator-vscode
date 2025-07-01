@@ -1461,7 +1461,9 @@
 
         function makeLastUndoStateSaved() {
             // All previous sates are now marked unsaved
-            undoStates = undoStates.map((state) => state.saved = false);
+            for (let i = 0; i < undoStates.length; i++) {
+                undoStates[i].saved = false;
+            }
             // Mark the last state as saved
             undoStates[undoStates.length - 1].saved = true;
         }
