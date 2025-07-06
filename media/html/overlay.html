@@ -71,7 +71,12 @@
             border: 2px solid;
             box-sizing: border-box;
             pointer-events: none;
+            z-index: inherit;
             background-color: transparent;
+        }
+
+        .bounding-box-container .bounding-box.selected {
+            z-index: 200;
         }
 
         /* Dot styles */
@@ -424,6 +429,7 @@
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
         <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
+        <div class="bounding-box-container" id="canvasDetectionBoxContainer"></div>
         <div class="mouse-line" id="horizontalLine"></div>
         <div class="mouse-line" id="verticalLine"></div>
     </div>
@@ -475,6 +481,14 @@
                 <h4>Labels (<span id="labelCount">0</span>)</h4>
                 <div class="labels-list" id="labelsList">
                     <div style="color: #888; font-style: italic; text-align: center;">No labels</div>
+                </div>
+            </div>
+
+            <!-- Model Detections -->
+            <div class="control-section">
+                <h4>Detections (<span id="detectCount">0</span>)</h4>
+                <div class="detections-list" id="detectionsList">
+                    <div style="color: #888; font-style: italic; text-align: center;">No detections</div>
                 </div>
             </div>
 
@@ -555,6 +569,7 @@
         let currentImageInfo = {};
         let currentLabels = [];
         let selectedLabelIndex = -1;
+        let selectedDetectionIndex = -1;
         let isDrawing = false;
         let drawingMode = false;
         let startPos = null;
@@ -625,6 +640,8 @@
             moveStartLabelCenter = null;
             // Unselect label
             selectedLabelIndex = -1;
+            // Unselect detection
+            selectedDetectionIndex = -1;
             // Reset zoom pan state
             panStartPos = null;
             panStartOffset = null;
@@ -633,11 +650,21 @@
         }
 
         function redrawAnnotations() {
-            $(".bounding-box-container").empty();
+            $("#canvasLabelBoxContainer").empty();
             // Draw existing labels
             currentLabels.forEach((label, index) => {
                 const isSelected = index === selectedLabelIndex;
-                drawBoundingBox(label, isSelected, index);
+                drawBoundingBox('canvasLabelBoxContainer', label, isSelected, index);
+            });
+        }
+
+        function redrawDetections() {
+            $("#canvasDetectionBoxContainer").empty();
+            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
+            // Draw existing detections
+            currentDetects.forEach((detect, index) => {
+                const isSelected = index === selectedDetectionIndex;
+                drawBoundingBox('canvasDetectionBoxContainer', detect, isSelected, index);
             });
         }
 
@@ -693,9 +720,10 @@
             });
 
             redrawAnnotations();
+            redrawDetections();
         }
 
-        function drawBoundingBox(label, isSelected, index) {
+        function drawBoundingBox(parentId, label, isSelected, index) {
             const containerWidth = parseFloat($('.bounding-box-container').css('width')) || canvas.offsetWidth;
             const containerHeight = parseFloat($('.bounding-box-container').css('height')) || canvas.offsetHeight;
 
@@ -704,34 +732,37 @@
             const width = label.w * containerWidth;
             const height = label.h * containerHeight;
 
-            const boxId = drawCSSBox('#canvasLabelBoxContainer', label.classId, index, x, y, width, height, isSelected);
+            const isLabel = parentId === 'canvasLabelBoxContainer';
+            const boxId = drawCSSBox(`#${parentId}`, isLabel, label.classId, index, x, y, width, height, isSelected);
 
             // Draw dots at all four corners
             let dotColor = (index >= 0 && index < currentLabels.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
             dotColor = dotColor.replace(', 1)', ', 0.9)');
             let dotRadius = 5;
-            drawDot(`#${boxId}`, 0, dotRadius, `dot_${index}_tl`, dotColor);
-            drawDot(`#${boxId}`, 1, dotRadius, `dot_${index}_tr`, dotColor);
-            drawDot(`#${boxId}`, 2, dotRadius, `dot_${index}_bl`, dotColor);
-            drawDot(`#${boxId}`, 3, dotRadius, `dot_${index}_br`, dotColor);
+            drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_tl`, dotColor);
+            drawDot(`#${boxId}`, 1, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_tr`, dotColor);
+            drawDot(`#${boxId}`, 2, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_bl`, dotColor);
+            drawDot(`#${boxId}`, 3, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_br`, dotColor);
 
-            // Draw markers at all the four corners and midpoints of sides
-            dotRadius -= 1;
-            drawMarker(`#${boxId}`, 0, dotRadius, `marker_${index}_tl`);
-            drawMarker(`#${boxId}`, 1, dotRadius, `marker_${index}_tr`);
-            drawMarker(`#${boxId}`, 2, dotRadius, `marker_${index}_bl`);
-            drawMarker(`#${boxId}`, 3, dotRadius, `marker_${index}_br`);
-            drawMarker(`#${boxId}`, 10, dotRadius, `marker_${index}_tm`);
-            drawMarker(`#${boxId}`, 20, dotRadius, `marker_${index}_lm`);
-            drawMarker(`#${boxId}`, 23, dotRadius, `marker_${index}_bm`);
-            drawMarker(`#${boxId}`, 13, dotRadius, `marker_${index}_rm`);
+            if (isLabel) {
+                // Draw markers at all the four corners and midpoints of sides
+                dotRadius -= 1;
+                drawMarker(`#${boxId}`, 0, dotRadius, `marker_label_${index}_tl`);
+                drawMarker(`#${boxId}`, 1, dotRadius, `marker_label_${index}_tr`);
+                drawMarker(`#${boxId}`, 2, dotRadius, `marker_label_${index}_bl`);
+                drawMarker(`#${boxId}`, 3, dotRadius, `marker_label_${index}_br`);
+                drawMarker(`#${boxId}`, 10, dotRadius, `marker_label_${index}_tm`);
+                drawMarker(`#${boxId}`, 20, dotRadius, `marker_label_${index}_lm`);
+                drawMarker(`#${boxId}`, 23, dotRadius, `marker_label_${index}_bm`);
+                drawMarker(`#${boxId}`, 13, dotRadius, `marker_label_${index}_rm`);
+            }
             if (classNames[label.classId]) {
-                drawLabel(`#${boxId}`, `${index + 1}: ${classNames[label.classId]}`, index, classColorNames[label.classId], y);
+                drawLabelClass(`#${boxId}`, isLabel, `${index + 1}: ${classNames[label.classId]}`, index, classColorNames[label.classId], y);
             }
         }
 
-        function drawCSSBox(containerId, classId, index, x, y, width, height, isSelected = false) {
-            const boxId = `boundingBox_${index}`;
+        function drawCSSBox(containerId, isLabel, classId, index, x, y, width, height, isSelected = false) {
+            const boxId = `boundingBox_${isLabel ? 'label' : 'detection'}_${index}`;
 
             // Remove existing box if updating
             $(`#${boxId}`).remove();
@@ -902,16 +933,16 @@
                 .replace('m', '');
         }
 
-        function drawLabel(containerId, text, index, color, globalY) {
-            const labelId = `label_${index}`;
+        function drawLabelClass(containerId, isLabel, text, index, color, globalY) {
+            const labelClassId = `${isLabel ? 'label': 'detect'}_${index}`;
 
             // Remove existing label if updating
-            $(`#${labelId}`).remove();
+            $(`#${labelClassId}`).remove();
 
             // Create label element
-            const labelElem = $('<div>')
+            const labelClassElem = $('<div>')
                 .addClass('label-class-name')
-                .attr('id', labelId)
+                .attr('id', labelClassId)
                 .text(text)
                 .css({
                     'font-size': `${fontSize}px`,
@@ -919,15 +950,15 @@
                     backgroundColor: color
                 });
             // Add to container first to calculate dimensions
-            $(containerId).append(labelElem);
+            $(containerId).append(labelClassElem);
 
-            const rect = labelElem.get(0).getBoundingClientRect();
+            const rect = labelClassElem.get(0).getBoundingClientRect();
 
-            labelElem.css({
+            labelClassElem.css({
                 left: `${Math.min(0, $(containerId).css('width') - rect.width)}px`,
                 top: `${-Math.min(globalY, rect.height + 2)}px`
             });
-            return labelId;
+            return labelClassId;
         }
 
         function writeClassNameCSS(label, isSelected, index, x, y) {
@@ -1128,7 +1159,42 @@
             const width = Math.abs(currentPos.x - startPos.x) * boxContainerToCanvasRatio;
             const height = Math.abs(currentPos.y - startPos.y) * boxContainerToCanvasRatio;
 
-            drawCSSBox('#canvasLabelBoxContainer', -1, currentLabels.length, x, y, width, height, true);
+            drawCSSBox('#canvasLabelBoxContainer', true, -1, currentLabels.length, x, y, width, height, true);
+        }
+
+        function updateDetectionsList() {
+            const $detectionsList = $('#detectionsList');
+            const $detectCount = $('#detectCount');
+            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
+            $detectCount.text(currentDetects.length);
+            if (currentDetects.length == 0) {
+                $detectionsList.html('<div style="color: #888; font-style: italic; text-align: center;">No labels</div>');
+                return;
+            }
+            $detectionsList.empty();
+            $.each(currentDetects, (index, detect) => {
+                const className = classNames[detect.classId] || `Calss ${detect.classId}`;
+
+                const $detectItem = $('<div>', {
+                    class: `detect-item`,
+                    html: `
+                    <div>
+                        <div class="detect-class">${className}</div>
+                        <div class="detect-coords">conf:${detect.conf.toFixed(3)}<br>x:${detect.cx.toFixed(3)} y:${detect.cy.toFixed(3)}<br>w:${detect.w.toFixed(3)} h:${detect.h.toFixed(3)}</div>
+                    </div>
+                    `
+                });
+                // Event handlers
+                $detectItem.on('click', (e) => {
+                    // Check if the clicked element is NOT a button or .detect-class
+                    if (!$(e.target).is('button') && !$(e.target).hasClass('detect-class')) {
+                        clicked = true;
+                        unSelectLabel();
+                        selectLabel(index);
+                    }
+                });
+                $detectionsList.append($detectItem);
+            });
         }
 
         function updateLabelsList() {
@@ -1156,7 +1222,7 @@
                     <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)} h:${label.h.toFixed(3)}</div>
                 </div>
                 <button class="label-delete-btn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
-            `
+                `
                 });
 
                 // Event handlers
@@ -1183,17 +1249,31 @@
             });
         }
 
+        function selectDetection(index) {
+            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
+            if (index < 0 || index >= currentDetects.length) return;
+            selectedDetectionIndex = index;
+            updateDetectionsList();
+            redrawDetections();
+        }
+
+        function unSelectDetection() {
+            selectedDetectionIndex = -1;
+            updateDetectionsList();
+            redrawDetections();
+        }
+
         function selectLabel(index) {
             if (index < 0 || index >= currentLabels.length) return;
             selectedLabelIndex = index;
             updateLabelsList();
-            draw();
+            redrawAnnotations();
         }
 
         function unSelectLabel() {
             selectedLabelIndex = -1;
             updateLabelsList();
-            draw();
+            redrawAnnotations();
         }
 
         function deleteLabel(index) {

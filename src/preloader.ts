@@ -10,6 +10,15 @@ interface LabelElement {
     h: number;
 }
 
+interface DetectionElement {
+    classId: number;
+    cx: number;
+    cy: number;
+    w: number;
+    h: number;
+    conf: number;
+}
+
 interface ImageInfo {
     path: string;
     index: number;
@@ -20,6 +29,7 @@ interface ImageInfo {
 interface BatchElement {
     imageSource: string | vscode.Uri | null;
     labels: LabelElement[];
+    detections: DetectionElement[];
     info: ImageInfo;
 }
 
@@ -29,6 +39,7 @@ interface CacheItem {
     base64Data: string;
     labels: LabelElement[];
     labelsMtime: number;
+    detections: DetectionElement[];
 }
 
 export class ImagePreloader {
@@ -204,14 +215,16 @@ export class ImagePreloader {
                 // Load labels data
                 const labels = await this.loadLabelsForImage(imagePath);
                 const labelsMtime = await this.getFileModTime(this.getLabelsPath(imagePath));
-
+                const detections = await this.loadDetectionsForImage(imagePath);
+                
                 // Create cache item
                 const cacheItem: CacheItem = {
                     imagePath,
                     imageIndex,
                     base64Data: dataUrl,
                     labels,
-                    labelsMtime
+                    labelsMtime,
+                    detections
                 };
 
                 // Insert cache item in correct position to maintain sequence
@@ -291,6 +304,25 @@ export class ImagePreloader {
         return path.join(labelsDir, `${name}.txt`);
     }
 
+    private getDetectionsPath(imagePath: string): string {
+        const dir = path.dirname(imagePath);
+        const name = path.basename(imagePath, path.extname(imagePath));
+
+        const sameFolderDetections = path.join(dir, `${name}.det.txt`);
+        if (fs.existsSync(sameFolderDetections)) {
+            return sameFolderDetections;
+        }
+
+        const dir_parts = dir.split(path.sep);
+        const lastImagesFolderIndex = dir_parts.lastIndexOf('images');
+        if (lastImagesFolderIndex !== -1) {
+            dir_parts[lastImagesFolderIndex] = 'detections';
+        }
+        const detectionsDir = dir_parts.join(path.sep);
+
+        return path.join(detectionsDir, `${name}.det.txt`);
+    }
+
     private async getFileModTime(filePath: string): Promise<number> {
         try {
             const stats = await fs.promises.stat(filePath);
@@ -325,8 +357,8 @@ export class ImagePreloader {
 
             const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
             const labels = labelContent
-                .split('\n')
-                .filter(line => line.trim())
+                .trim().split('\n')
+                .filter(line => line.trim() && line.split(' ').length !== 5)
                 .map(line => {
                     const parts = line.split(' ');
                     return {
@@ -345,15 +377,57 @@ export class ImagePreloader {
         }
     }
 
-    // EXACT SAME BEHAVIOR - returns Promise<LabelElement[]>
-    public getCurrentLabel(): Promise<LabelElement[]> {
-        const currentPath = this.imageFiles[this.currentIndex];
-        const cachedItem = this.findCacheItem(this.currentIndex);
+    private async loadDetectionsForImage(imagePath: string): Promise<DetectionElement[]> {
+        try {
+            // Check if we have cached detections
+            const cachedItem = this.findCacheItemByPath(imagePath);
+            if (cachedItem && cachedItem.detections) {
+                return cachedItem.detections;
+            }
+            
+            const detectionPath = this.getDetectionsPath(imagePath);
+            if (!fs.existsSync(detectionPath)) {
+                return [];
+            }
 
+            const detectContent = await fs.promises.readFile(detectionPath, 'utf-8');
+            const detections = detectContent
+                .trim().split('\n')
+                .filter(line => line.trim() && line.split(' ').length !== 6)
+                .map(line => {
+                    const parts = line.split(' ');
+                    return {
+                        classId: parseInt(parts[0]),
+                        cx: parseInt(parts[1]),
+                        cy: parseInt(parts[2]),
+                        w: parseInt(parts[3]),
+                        h: parseInt(parts[4]),
+                        conf: parseInt(parts[5])
+                    };
+                });
+            return detections;
+        } catch (error) {
+            return [];
+        }
+    }
+
+    public getCurrentDetection(): Promise<DetectionElement[]> {
+        const cachedItem = this.findCacheItem(this.currentIndex);
+        if (cachedItem) {
+            return Promise.resolve(cachedItem.detections);
+        }
+        
+        const currentPath = this.imageFiles[this.currentIndex];
+        return this.loadDetectionsForImage(currentPath);
+    }
+
+    public getCurrentLabel(): Promise<LabelElement[]> {
+        const cachedItem = this.findCacheItem(this.currentIndex);
         if (cachedItem) {
             return Promise.resolve(cachedItem.labels);
         }
-
+        
+        const currentPath = this.imageFiles[this.currentIndex];
         return this.loadLabelsForImage(currentPath);
     }
 
@@ -412,6 +486,7 @@ export class ImagePreloader {
                 batch.set(info.index, {
                     imageSource: cacheItem.base64Data,
                     labels: cacheItem.labels,
+                    detections: cacheItem.detections,
                     info: info
                 });
             }

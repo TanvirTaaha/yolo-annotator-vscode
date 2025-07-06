@@ -299,6 +299,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         const currentBatchElem = {
                             imageSource: result.cacheItem?.base64Data,
                             labels: result.cacheItem?.labels,
+                            detections: result.cacheItem?.detections,
                             info: typeof result.cacheItem?.imageIndex === 'number'
                                 ? this.imagePreloader?.getImageInfo(result.cacheItem.imageIndex)
                                 : undefined
@@ -316,11 +317,13 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     const currentSrc = this.imagePreloader?.getCurrentImageSource();
                     const currentInfo = this.imagePreloader?.getCurrentImageInfo();
                     const currentLabels = await this.imagePreloader?.getCurrentLabel();
+                    const currentDetections = await this.imagePreloader?.getCurrentDetection();
                     webviewPanel.webview.postMessage({
                         command: 'updateImage',
                         src: currentSrc,
                         info: currentInfo,
                         labels: currentLabels,
+                        detections: currentDetections,
                         classes: this.classes,
                         classColors: this.classColors
                     });
