@@ -55,6 +55,10 @@
             user-select: none;
         }
 
+        .bounding-box-container.hidden {
+            display: none;
+        }
+
         .bounding-box-container .label-class-name {
             position: absolute;
             z-index: 101;
@@ -189,6 +193,10 @@
         .control-section {
             margin-bottom: 12px;
             user-select: none;
+        }
+
+        .control-section .control-section-header {
+            display: inline-block;
         }
 
         .control-section h4 {
@@ -428,8 +436,8 @@
 <body>
     <div class="canvas-container" id="canvasContainer">
         <canvas id="annotationCanvas"></canvas>
-        <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
         <div class="bounding-box-container" id="canvasDetectionBoxContainer"></div>
+        <div class="bounding-box-container" id="canvasLabelBoxContainer"></div>
         <div class="mouse-line" id="horizontalLine"></div>
         <div class="mouse-line" id="verticalLine"></div>
     </div>
@@ -478,7 +486,10 @@
 
             <!-- Current Labels -->
             <div class="control-section">
-                <h4>Labels (<span id="labelCount">0</span>)</h4>
+                <div class="control-section-header">
+                    <h4>Labels (<span id="labelCount">0</span>)</h4>
+                    <input type="checkbox" name="label-vis-checkbox" id="labelVisCheckbox">Show
+                </div>
                 <div class="labels-list" id="labelsList">
                     <div style="color: #888; font-style: italic; text-align: center;">No labels</div>
                 </div>
@@ -486,8 +497,11 @@
 
             <!-- Model Detections -->
             <div class="control-section">
-                <h4>Detections (<span id="detectCount">0</span>)</h4>
-                <div class="detections-list" id="detectionsList">
+                <div class="control-section-header">
+                    <h4>Detections (<span id="detectCount">0</span>)</h4>
+                    <input type="checkbox" name="detect-vis-checkbox" id="detectVisCheckbox">Show
+                </div>
+                <div class="labels-list" id="detectionsList">
                     <div style="color: #888; font-style: italic; text-align: center;">No detections</div>
                 </div>
             </div>
@@ -569,6 +583,7 @@
         let currentImageInfo = {};
         let currentLabels = [];
         let selectedLabelIndex = -1;
+        let currentDetections = [];
         let selectedDetectionIndex = -1;
         let isDrawing = false;
         let drawingMode = false;
@@ -660,9 +675,8 @@
 
         function redrawDetections() {
             $("#canvasDetectionBoxContainer").empty();
-            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
             // Draw existing detections
-            currentDetects.forEach((detect, index) => {
+            currentDetections.forEach((detect, index) => {
                 const isSelected = index === selectedDetectionIndex;
                 drawBoundingBox('canvasDetectionBoxContainer', detect, isSelected, index);
             });
@@ -707,8 +721,12 @@
                 position: 'absolute',
                 'z-index': '100',
                 margin: 'auto',
+                'background-color': 'transparent',
                 'user-select': 'none'
             });
+
+            $('#canvasLabelBoxContainer .bounding-box').css('z-index', '100');
+            $('#canvasDetectionBoxContainer .bounding-box').css('z-index', '99');
 
             $('#canvasLabelBoxContainer').mouseup(unsetResizing);
             $('#canvasLabelBoxContainer').mouseleave(unsetResizing);
@@ -718,6 +736,13 @@
                     $('#verticalLine').css('left', `${e.clientX}px`);
                 }
             });
+            
+            $('#labelVisCheckbox')
+                .prop('checked', true)
+                .click(() => $('#canvasLabelBoxContainer').toggleClass('hidden', !$('#labelVisCheckbox').prop('checked')));
+            $('#detectVisCheckbox')
+                .prop('checked', true)
+                .click(() => $('#canvasDetectionBoxContainer').toggleClass('hidden', !$('#detectVisCheckbox').prop('checked')));
 
             redrawAnnotations();
             redrawDetections();
@@ -736,13 +761,13 @@
             const boxId = drawCSSBox(`#${parentId}`, isLabel, label.classId, index, x, y, width, height, isSelected);
 
             // Draw dots at all four corners
-            let dotColor = (index >= 0 && index < currentLabels.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
+            let dotColor = (index >= 0 && index < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
             dotColor = dotColor.replace(', 1)', ', 0.9)');
             let dotRadius = 5;
-            drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_tl`, dotColor);
-            drawDot(`#${boxId}`, 1, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_tr`, dotColor);
-            drawDot(`#${boxId}`, 2, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_bl`, dotColor);
-            drawDot(`#${boxId}`, 3, dotRadius, `dot_${isLabel ? 'label':'detect'}_${index}_br`, dotColor);
+            drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tl`, dotColor);
+            drawDot(`#${boxId}`, 1, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tr`, dotColor);
+            drawDot(`#${boxId}`, 2, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_bl`, dotColor);
+            drawDot(`#${boxId}`, 3, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_br`, dotColor);
 
             if (isLabel) {
                 // Draw markers at all the four corners and midpoints of sides
@@ -757,7 +782,7 @@
                 drawMarker(`#${boxId}`, 13, dotRadius, `marker_label_${index}_rm`);
             }
             if (classNames[label.classId]) {
-                drawLabelClass(`#${boxId}`, isLabel, `${index + 1}: ${classNames[label.classId]}`, index, classColorNames[label.classId], y);
+                drawLabelClass(`#${boxId}`, isLabel, isLabel ? `${index + 1}: ${classNames[label.classId]}` : `${classNames[label.classId]} ${(label.conf * 100).toFixed(1)}%`, index, classColorNames[label.classId], y);
             }
         }
 
@@ -920,7 +945,7 @@
         }
 
         function redrawSelectedLabelBox() {
-            drawBoundingBox(currentLabels[selectedLabelIndex], true, selectedLabelIndex);
+            drawBoundingBox('canvasLabelBoxContainer', currentLabels[selectedLabelIndex], true, selectedLabelIndex);
         }
 
         function getHandleFromDivId(position) {
@@ -934,7 +959,7 @@
         }
 
         function drawLabelClass(containerId, isLabel, text, index, color, globalY) {
-            const labelClassId = `${isLabel ? 'label': 'detect'}_${index}`;
+            const labelClassId = `${isLabel ? 'label' : 'detect'}_${index}`;
 
             // Remove existing label if updating
             $(`#${labelClassId}`).remove();
@@ -1165,32 +1190,33 @@
         function updateDetectionsList() {
             const $detectionsList = $('#detectionsList');
             const $detectCount = $('#detectCount');
-            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
-            $detectCount.text(currentDetects.length);
-            if (currentDetects.length == 0) {
+            $detectCount.text(currentDetections.length);
+            if (currentDetections.length == 0) {
                 $detectionsList.html('<div style="color: #888; font-style: italic; text-align: center;">No labels</div>');
                 return;
             }
             $detectionsList.empty();
-            $.each(currentDetects, (index, detect) => {
-                const className = classNames[detect.classId] || `Calss ${detect.classId}`;
+            $.each(currentDetections, (index, detect) => {
+                const className = `${classNames[detect.classId]} ${(detect.conf * 100).toFixed(1)}%` || `Class ${detect.classId}`;
+                const isSelected = index === selectedDetectionIndex;
 
                 const $detectItem = $('<div>', {
-                    class: `detect-item`,
+                    class: `label-item ${isSelected ? 'selected' : ''}`,
                     html: `
                     <div>
-                        <div class="detect-class">${className}</div>
-                        <div class="detect-coords">conf:${detect.conf.toFixed(3)}<br>x:${detect.cx.toFixed(3)} y:${detect.cy.toFixed(3)}<br>w:${detect.w.toFixed(3)} h:${detect.h.toFixed(3)}</div>
+                        <div class="label-class">${className}</div>
+                        <div class="label-coords">x:${detect.cx.toFixed(3)}  y:${detect.cy.toFixed(3)}<br>w:${detect.w.toFixed(3)}  h:${detect.h.toFixed(3)}</div>
                     </div>
                     `
                 });
+                $detectItem.find('.label-class').css('pointer-events', 'none');
                 // Event handlers
                 $detectItem.on('click', (e) => {
                     // Check if the clicked element is NOT a button or .detect-class
-                    if (!$(e.target).is('button') && !$(e.target).hasClass('detect-class')) {
+                    if (!$(e.target).is('button') && !$(e.target).hasClass('label-class')) {
                         clicked = true;
-                        unSelectLabel();
-                        selectLabel(index);
+                        unSelectDetection();
+                        selectDetection(index);
                     }
                 });
                 $detectionsList.append($detectItem);
@@ -1217,12 +1243,12 @@
                 const $labelItem = $('<div>', {
                     class: `label-item ${isSelected ? 'selected' : ''}`,
                     html: `
-                <div>
-                    <div class="label-class">${className}</div>
-                    <div class="label-coords">x:${label.cx.toFixed(3)} y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)} h:${label.h.toFixed(3)}</div>
-                </div>
-                <button class="label-delete-btn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
-                `
+                    <div>
+                        <div class="label-class">${className}</div>
+                        <div class="label-coords">x:${label.cx.toFixed(3)}  y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)}  h:${label.h.toFixed(3)}</div>
+                    </div>
+                    <button class="label-delete-btn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
+                    `
                 });
 
                 // Event handlers
@@ -1250,8 +1276,7 @@
         }
 
         function selectDetection(index) {
-            const currentDetects = imageAndLabelBatchBuffer.batch.get(currentImageInfo.index).detections;
-            if (index < 0 || index >= currentDetects.length) return;
+            if (index < 0 || index >= currentDetections.length) return;
             selectedDetectionIndex = index;
             updateDetectionsList();
             redrawDetections();
@@ -1607,13 +1632,17 @@
             }
         });
 
-        addLabelBtn.addEventListener('click', () => {
+        addLabelBtn.addEventListener('click', (e) => {
             drawingMode = !drawingMode;
             addLabelBtn.textContent = drawingMode ? 'Cancel' : 'Add Box';
             addLabelBtn.className = drawingMode ? 'danger' : '';
             $('#canvasLabelBoxContainer').css('cursor', drawingMode ? 'crosshair' : 'default');
             controlPanel.classList.toggle('ghosted', drawingMode);
             $('.mouse-line').toggleClass('visible', drawingMode);
+            if (drawingMode) {
+                $('#horizontalLine').css('top', `${e.clientY}px`);
+                $('#verticalLine').css('left', `${e.clientX}px`);
+            }
         });
 
         saveBtn.addEventListener('click', () => {
@@ -1809,6 +1838,15 @@
             updateZoom();
         }
 
+        function processDetections(loadedDetections, loadedClasses, loadedColors) {
+            currentDetections = loadedDetections || [];
+            classNames = loadedClasses || classNames;
+            classColorNames = loadedColors;
+            selectedDetectionIndex = -1;
+            updateDetectionsList();
+            redrawDetections();
+        }
+
         function findLabelAtPosition(x, y) {
             var retLabelIndex = -1;
             var minArea = Number.MAX_SAFE_INTEGER;
@@ -1967,6 +2005,7 @@
                     setTimeout(draw, 50);
                     // Process Labels
                     processLables(message.labels, message.classes, message.classColors);
+                    processDetections(message.detections, message.classes, message.classColors);
                     pushUndoState({ labels: currentLabels, saved: true });
                     break;
 
