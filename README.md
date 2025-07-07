@@ -51,6 +51,10 @@ project/
 │   ├── image1.txt
 │   ├── image2.txt
 │   └── ...
+├── detections/
+│   ├── image1.det.txt
+│   ├── image2.det.txt
+│   └── ...
 └── classes.txt
 ```
 
@@ -64,7 +68,7 @@ dog
 cat
 ```
 
-### Output Format
+### Label Format
 
 Each `.txt` file contains one line per object:
 
@@ -72,6 +76,16 @@ Each `.txt` file contains one line per object:
 class_id center_x center_y width height
 0 0.5 0.5 0.3 0.4
 1 0.2 0.3 0.1 0.2
+```
+
+### Detection Format
+
+Each `.det.txt` file contains one line per object:
+
+```markdown
+class_id center_x center_y width height confidence
+0 0.5 0.5 0.3 0.4 0.75
+1 0.2 0.3 0.1 0.2 0.6
 ```
 
 ## Requirements
