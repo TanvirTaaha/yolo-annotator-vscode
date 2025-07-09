@@ -358,18 +358,22 @@ export class ImagePreloader {
             const labelContent = await fs.promises.readFile(labelPath, 'utf-8');
             const labels = labelContent
                 .trim().split('\n')
-                .filter(line => line.trim() && line.split(' ').length === 5)
+                .filter(line => line.trim())
                 .map(line => {
                     const parts = line.split(' ').filter(part => part.trim());
-                    return {
-                        classId: parseInt(parts[0]),
-                        cx: parseFloat(parts[1]),
-                        cy: parseFloat(parts[2]),
-                        w: parseFloat(parts[3]),
-                        h: parseFloat(parts[4])
-                    };
-                });
-
+                    if (parts.length === 5){
+                        return {
+                            classId: parseInt(parts[0]),
+                            cx: parseFloat(parts[1]),
+                            cy: parseFloat(parts[2]),
+                            w: parseFloat(parts[3]),
+                            h: parseFloat(parts[4])
+                        };
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(lbl => lbl !== null);
             return labels;
         } catch (error) {
             console.warn(`labels.txt not found for ${imagePath}`);
@@ -393,18 +397,23 @@ export class ImagePreloader {
             const detectContent = await fs.promises.readFile(detectionPath, 'utf-8');
             const detections = detectContent
                 .trim().split('\n')
-                .filter(line => line.trim() && line.split(' ').length === 6)
+                .filter(line => line.trim())
                 .map(line => {
                     const parts = line.split(' ').filter(part => part.trim());
-                    return {
-                        classId: parseInt(parts[0]),
-                        cx: parseFloat(parts[1]),
-                        cy: parseFloat(parts[2]),
-                        w: parseFloat(parts[3]),
-                        h: parseFloat(parts[4]),
-                        conf: parseFloat(parts[5])
-                    };
-                });
+                    if (parts.length === 6) {
+                        return {
+                            classId: parseInt(parts[0]),
+                            cx: parseFloat(parts[1]),
+                            cy: parseFloat(parts[2]),
+                            w: parseFloat(parts[3]),
+                            h: parseFloat(parts[4]),
+                            conf: parseFloat(parts[5])
+                        };
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(det => det !== null);
             return detections;
         } catch (error) {
             return [];

@@ -233,7 +233,6 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
         const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
 
         if (buffer) {
-
             for (const batchElem of buffer.batch.values()) {
                 if (this.stopWorking) { return; }
                 webview.postMessage({
@@ -244,9 +243,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 });
             }
         }
-        webview.postMessage({
-            command: 'updateImageAndLabelBufferEnd'
-        });
+        Promise.resolve().then(() => webview.postMessage({ command: 'updateImageAndLabelBufferEnd' }));
     }
 
     private async reloadWithDifferentDocument(webviewPanel: vscode.WebviewPanel, newDocumentPath: string): Promise<void> {
@@ -313,7 +310,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     }
                     break;
 
-                case 'getCurrentImage':
+                case 'getCurrentlyOpennedDocumentImage':
+                    this.imagePreloader?.updateCurrentIndex(path.basename(document.uri.fsPath));
                     const currentSrc = this.imagePreloader?.getCurrentImageSource();
                     const currentInfo = this.imagePreloader?.getCurrentImageInfo();
                     const currentLabels = await this.imagePreloader?.getCurrentLabel();
