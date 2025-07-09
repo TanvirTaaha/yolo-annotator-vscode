@@ -208,7 +208,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 console.warn("No active webview panel to post message.");
             }
         } else {
-            console.log("User cancelled class selection prompt.");
+            console.debug("User cancelled class selection prompt.");
         }
     }
 
@@ -230,10 +230,9 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     }
 
     private async sendCacheBuffer(webview: vscode.Webview, currentKeys: number[]): Promise<void> {
-        const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
+        const buffer = await this.imagePreloader?.getImageAndLabelBatchWithoutCurrentKeys(currentKeys);
 
         if (buffer) {
-
             for (const batchElem of buffer.batch.values()) {
                 if (this.stopWorking) { return; }
                 webview.postMessage({
@@ -244,9 +243,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 });
             }
         }
-        webview.postMessage({
-            command: 'updateImageAndLabelBufferEnd'
-        });
+        Promise.resolve().then(() => webview.postMessage({ command: 'updateImageAndLabelBufferEnd' }));
     }
 
     private async reloadWithDifferentDocument(webviewPanel: vscode.WebviewPanel, newDocumentPath: string): Promise<void> {
@@ -313,7 +310,8 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                     }
                     break;
 
-                case 'getCurrentImage':
+                case 'getCurrentlyOpennedDocumentImage':
+                    this.imagePreloader?.updateCurrentIndex(path.basename(document.uri.fsPath));
                     const currentSrc = this.imagePreloader?.getCurrentImageSource();
                     const currentInfo = this.imagePreloader?.getCurrentImageInfo();
                     const currentLabels = await this.imagePreloader?.getCurrentLabel();
