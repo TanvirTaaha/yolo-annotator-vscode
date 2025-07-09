@@ -143,6 +143,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
+    "@types/natural-compare-lite": "^1.4.2",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.100.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
@@ -155,6 +156,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "jquery": "^3.7.1"
+    "jquery": "^3.7.1",
+    "natural-compare-lite": "^1.4.0"
   }
 }

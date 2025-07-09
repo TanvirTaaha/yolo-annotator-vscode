@@ -208,7 +208,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                 console.warn("No active webview panel to post message.");
             }
         } else {
-            console.log("User cancelled class selection prompt.");
+            console.debug("User cancelled class selection prompt.");
         }
     }
 
@@ -230,7 +230,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
     }
 
     private async sendCacheBuffer(webview: vscode.Webview, currentKeys: number[]): Promise<void> {
-        const buffer = await this.imagePreloader?.getImageAndLabelBatchAroundCurrent(currentKeys);
+        const buffer = await this.imagePreloader?.getImageAndLabelBatchWithoutCurrentKeys(currentKeys);
 
         if (buffer) {
             for (const batchElem of buffer.batch.values()) {

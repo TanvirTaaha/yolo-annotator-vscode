@@ -769,7 +769,7 @@
             const boxId = drawCSSBox(`#${parentId}`, isLabel, label.classId, index, x, y, width, height, isSelected);
 
             // Draw dots at all four corners
-            let dotColor = (index >= 0 && index < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
+            let dotColor = (label.classId >= 0 && label.classId < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
             dotColor = dotColor.replace(', 1)', ', 0.9)');
             let dotRadius = 5;
             drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tl`, dotColor);
@@ -811,7 +811,7 @@
             // Remove existing box if updating
             $(`#${boxId}`).remove();
 
-            const color = (classId >= 0) ? classColorNames[classId] : newClassColor;
+            const color = (classId >= 0 && classId < classNames.length) ? classColorNames[classId] : newClassColor;
             // Create bounding box element
             const boundingBox = $('<div>')
                 .addClass('bounding-box')
@@ -1029,10 +1029,6 @@
             cssObj.top = `${((y > rect.height) ? y - (fontSize * 1.9) : y)}px`;
             cssObj.borderRadius = (y > rect.height) ? `${fontSize * 0.5}px ${fontSize * 0.5}px 0px 0px` : `0px 0px ${fontSize * 0.5}px ${fontSize * 0.5}px`;
             classNameSpan.css(cssObj);
-        }
-
-        function drawCrossLines(mouseX, mouseY) {
-
         }
 
         function writeClassName(label, isSelected, index) {

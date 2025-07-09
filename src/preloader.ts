@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import naturalCompare from 'natural-compare-lite';
 
 interface LabelElement {
     classId: number;
@@ -62,7 +63,7 @@ export class ImagePreloader {
         this.imageFiles = files
             .filter(file => /\.(jpg|jpeg|png|bmp|webp)$/i.test(file))
             .map(file => path.join(directoryPath, file))
-            .sort(); // Sort for consistent ordering
+            .sort((a, b) => naturalCompare(a.toLowerCase(), b.toLowerCase())); // Sort for consistent ordering
 
         // Find current image index
         this.currentIndex = this.imageFiles.findIndex(file => file === currentImagePath);
@@ -211,7 +212,6 @@ export class ImagePreloader {
                 const base64 = buffer.toString('base64');
                 const mimeType = this.getMimeType(imagePath);
                 const dataUrl = `data:${mimeType};base64,${base64}`;
-
                 // Load labels data
                 const labels = await this.loadLabelsForImage(imagePath);
                 const labelsMtime = await this.getFileModTime(this.getLabelsPath(imagePath));
@@ -487,7 +487,7 @@ export class ImagePreloader {
         }
     }
 
-    public async getImageAndLabelBatchAroundCurrent(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
+    public async getImageAndLabelBatchWithoutCurrentKeys(currentKeys: number[]): Promise<{ batch: Map<number, BatchElement> }> {
         const batch: Map<number, BatchElement> = new Map();
         this.cache.map((cacheItem) => {
             if (!currentKeys.includes(cacheItem.imageIndex)) {
