@@ -1359,7 +1359,7 @@
             prevBtn.disabled = false;
         }
 
-        function redrawImageAndLabel(index) {
+        function redrawImageLabelAndDetections(index) {
             const batchElem = imageAndLabelBatchBuffer.batch.get(index);
             if (!batchElem) {
                 console.warn(`No element found for index:${index}`);
@@ -1381,6 +1381,7 @@
             }, 50);
             // update labels
             processLables(batchElem.labels, imageAndLabelBatchBuffer.classes, imageAndLabelBatchBuffer.classColors);
+            processDetections(batchElem.detections, imageAndLabelBatchBuffer.classes, imageAndLabelBatchBuffer.classColors);
             pushUndoState({ labels: currentLabels, saved: true });
         }
 
@@ -1684,7 +1685,7 @@
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
-            redrawImageAndLabel(currentImageInfo.index - 1);
+            redrawImageLabelAndDetections(currentImageInfo.index - 1);
             if (!isBatchRequestPending) {
                 isBatchRequestPending = true;
                 vscode.postMessage({ // request to update the buffer
@@ -1701,7 +1702,7 @@
             if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
                 return;
             }
-            redrawImageAndLabel(currentImageInfo.index + 1);
+            redrawImageLabelAndDetections(currentImageInfo.index + 1);
             if (!isBatchRequestPending) {
                 isBatchRequestPending = true;
                 vscode.postMessage({ // request to update the buffer
