@@ -946,16 +946,16 @@
             }
 
             markerElem.mousedown((e) => {
-                if (e.target.id.search(`marker_${selectedLabelIndex}`) !== -1) {
-                    const pos = getMousePosOnCanvas(e);
-                    const mouseX = pos.x;
-                    const mouseY = pos.y;
+                // if (e.target.id.search(`marker_label_${selectedLabelIndex}`) === -1) { return }
+                const pos = getMousePosOnCanvas(e);
+                const mouseX = pos.x;
+                const mouseY = pos.y;
 
-                    isResizing = true;
-                    resizeHandle = getHandleFromDivId(e.target.id);
-                    resizeStartPos = { x: mouseX, y: mouseY };
-                    originalLabel = { ...currentLabels[selectedLabelIndex] };
-                }
+                isResizing = true;
+                resizeHandle = getHandleFromDivId(e.target.id);
+                resizeStartPos = { x: mouseX, y: mouseY };
+                originalLabel = { ...currentLabels[selectedLabelIndex] }; // deepcopy
+
             });
 
             markerElem.mouseup(unsetResizing);
@@ -1350,6 +1350,7 @@
             discardChanges.classList.toggle('show', isDiscardChangesShown);
             nextBtn.disabled = true;
             prevBtn.disabled = true;
+            saveBtn.disabled = false;
         }
 
         function hideDiscardChangesText() {
@@ -1357,6 +1358,7 @@
             discardChanges.classList.toggle('show', isDiscardChangesShown);
             nextBtn.disabled = false;
             prevBtn.disabled = false;
+            saveBtn.disabled = true;
         }
 
         function redrawImageLabelAndDetections(index) {
