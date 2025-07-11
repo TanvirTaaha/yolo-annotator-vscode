@@ -1684,7 +1684,7 @@
         });
 
         prevBtn.addEventListener('click', () => {
-            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
+            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index - 1)) {
                 return;
             }
             redrawImageLabelAndDetections(currentImageInfo.index - 1);
@@ -1701,7 +1701,7 @@
         });
 
         nextBtn.addEventListener('click', () => {
-            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index)) {
+            if (!imageAndLabelBatchBuffer.batch || !imageAndLabelBatchBuffer.batch.has(currentImageInfo.index + 1)) {
                 return;
             }
             redrawImageLabelAndDetections(currentImageInfo.index + 1);
@@ -2092,14 +2092,14 @@
             vscode.postMessage({
                 command: 'giveMeSettings'
             });
-            vscode.postMessage({
-                command: 'getCurrentlyOpennedDocumentImage'
-            });
+            vscode.postMessage({ command: 'getCurrentlyOpennedDocumentImage' });
             imageAndLabelBatchBuffer.batch = new Map(); // Initialize the map
-            vscode.postMessage({
-                command: 'sendCacheBuffer',
-                currentKeys: []
-            });
+            setTimeout(() => {
+                vscode.postMessage({
+                    command: 'sendCacheBuffer',
+                    currentKeys: []
+                });
+            }, 1); // Slight delay for the 'updateImage' message to be passed in between this time
             document.getElementById('shortcutHelp').classList.toggle('hide', "${showShortcutsHelp}" === "hide");
         });
     </script>

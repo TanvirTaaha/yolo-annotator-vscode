@@ -459,7 +459,8 @@ export class ImagePreloader {
     // EXACT SAME BEHAVIOR - returns boolean
     public async saveLabelsForImage(imageFilename: string, labels: any[]): Promise<{ result: Boolean, cacheItem: CacheItem | undefined }> {
         try {
-            const imagePath = this.imageFiles.find((p) => path.basename(p) === imageFilename) || '';
+            const savedFileIndex = this.imageFiles.findIndex((p) => path.basename(p) === imageFilename) || -1;
+            const imagePath = this.imageFiles[savedFileIndex];
             const labelPath = this.getLabelsPath(imagePath);
             const content = labels
                 .map(l => `${l.classId} ${l.cx.toFixed(6)} ${l.cy.toFixed(6)} ${l.w.toFixed(6)} ${l.h.toFixed(6)}`)
@@ -469,7 +470,7 @@ export class ImagePreloader {
             await fs.promises.writeFile(labelPath, content);
 
             // Update cached labels
-            const cachedItem = this.findCacheItem(this.currentIndex);
+            const cachedItem = this.findCacheItem(savedFileIndex);
             if (cachedItem) {
                 cachedItem.labels = labels.map(l => ({
                     classId: l.classId,

@@ -293,7 +293,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         result: result.result
                     });
                     if (result.result) {
-                        const currentBatchElem = {
+                        const savedBatchElem = {
                             imageSource: result.cacheItem?.base64Data,
                             labels: result.cacheItem?.labels,
                             detections: result.cacheItem?.detections,
@@ -303,7 +303,7 @@ export class YOLOImageEditorProvider implements vscode.CustomReadonlyEditorProvi
                         };
                         webviewPanel.webview.postMessage({
                             command: 'updateImageAndLabelBuffer',
-                            batchElement: currentBatchElem,
+                            batchElement: savedBatchElem,
                             classes: this.classes,
                             classColors: this.classColors
                         });
