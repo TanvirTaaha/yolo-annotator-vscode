@@ -459,7 +459,7 @@ export class ImagePreloader {
     // EXACT SAME BEHAVIOR - returns boolean
     public async saveLabelsForImage(imageFilename: string, labels: any[]): Promise<{ result: Boolean, cacheItem: CacheItem | undefined }> {
         try {
-            const savedFileIndex = this.imageFiles.findIndex((p) => path.basename(p) === imageFilename) || -1;
+            const savedFileIndex = this.imageFiles.findIndex((p) => path.basename(p) === imageFilename);
             const imagePath = this.imageFiles[savedFileIndex];
             const labelPath = this.getLabelsPath(imagePath);
             const content = labels
@@ -484,6 +484,7 @@ export class ImagePreloader {
 
             return { result: true, cacheItem: cachedItem };
         } catch (error) {
+            console.error(error);
             return { result: false, cacheItem: undefined };
         }
     }
