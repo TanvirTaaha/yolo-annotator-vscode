@@ -2,7 +2,7 @@
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "publisher": "TanvirTaaha",
   "author": {
     "name": "Tanvir Hossain Taaha",
