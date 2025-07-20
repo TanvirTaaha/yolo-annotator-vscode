@@ -1805,8 +1805,11 @@
                 const y = Math.min(startPos.y, currentPos.y);
                 const width = Math.abs(currentPos.x - startPos.x);
                 const height = Math.abs(currentPos.y - startPos.y);
+                
+                const containerWidthRatio = (parseFloat($('.bounding-box-container').css('width')) || canvas.offsetWidth) / imageelem.naturalWidth;
+                const containerHeightRatio = (parseFloat($('.bounding-box-container').css('height')) || canvas.offsetHeight) / imageelem.naturalHeight;
 
-                if (width > 10 && height > 10) {
+                if (width * containerWidthRatio > 10 && height * containerHeightRatio > 10) {
                     const label = {
                         classId: -1,
                         cx: (x + width / 2) / canvas.width,
