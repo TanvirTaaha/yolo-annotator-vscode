@@ -86,7 +86,7 @@
             opacity: 0.5;
             border: 2px dotted;
         }
-        
+
         .bounding-box-container .bounding-box[id*="detection"].selected {
             opacity: 0.8;
             border: 2px dashed;
@@ -549,6 +549,7 @@
         <div class="shortcut-item"><span class="shortcut-key">Shift+Ctrl+scroll</span>: Fast zoom in/out</div>
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+z</span>: Undo</div>
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+Shift+z</span>: Redo</div>
+        <div class="shortcut-item"><span class="shortcut-key">Ctrl+A</span>: Add detection as label</div>
         <div class="shortcut-help-text"><span>Hide this menu in VSCode Settings</span></div>
     </div>
 
@@ -784,7 +785,7 @@
 
             const isLabel = parentId === 'canvasLabelBoxContainer';
             const boxId = drawCSSBox(`#${parentId}`, isLabel, label.classId, index, x, y, width, height, isSelected);
-            
+
             if (isLabel) {
                 // Draw dots at all four corners
                 let dotColor = (label.classId >= 0 && label.classId < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
@@ -1237,8 +1238,12 @@
                     html: `
                     <div>
                         <div class="label-class">${className}</div>
-                        <div class="label-coords">x:${detect.cx.toFixed(3)}  y:${detect.cy.toFixed(3)}<br>w:${detect.w.toFixed(3)}  h:${detect.h.toFixed(3)}</div>
+                        <div class="label-coords">
+                            x:${detect.cx.toFixed(3)} y:${detect.cy.toFixed(3)}<br>
+                            w:${detect.w.toFixed(3)} h:${detect.h.toFixed(3)}
+                        </div>
                     </div>
+                    <button class="detection-copy-btn" style="background: #007bff; padding: 2px 6px; font-size: 10px;">+</button>
                     `
                 });
                 $detectItem.find('.label-class').css('pointer-events', 'none');
@@ -1249,6 +1254,9 @@
                         clicked = true;
                         unSelectDetection();
                         selectDetection(index);
+                    }
+                    if ($(e.target).is('button') && $(e.target).hasClass('detection-copy-btn')) {
+                        copyDetectionToLabel(index);
                     }
                 });
                 $detectionsList.append($detectItem);
@@ -1277,7 +1285,10 @@
                     html: `
                     <div>
                         <div class="label-class">${className}</div>
-                        <div class="label-coords">x:${label.cx.toFixed(3)}  y:${label.cy.toFixed(3)}<br>w:${label.w.toFixed(3)}  h:${label.h.toFixed(3)}</div>
+                        <div class="label-coords">
+                            x:${label.cx.toFixed(3)}  y:${label.cy.toFixed(3)}<br>
+                            w:${label.w.toFixed(3)}  h:${label.h.toFixed(3)}
+                        </div>
                     </div>
                     <button class="label-delete-btn" style="background: #dc3545; padding: 2px 6px; font-size: 10px;">×</button>
                     `
@@ -1577,8 +1588,9 @@
             return JSON.parse(JSON.stringify(obj));
         }
 
-        function copyDetectionToLabel(oldDetection) {
-            oldDetection = deepCopyObj(oldDetection);
+        function copyDetectionToLabel(index) {
+            if (index < 0 || index >= currentDetections.length) return;
+            const oldDetection = deepCopyObj(currentDetections[index]);
             const newLabel = {
                 cx: oldDetection.cx,
                 cy: oldDetection.cy,
@@ -1586,7 +1598,11 @@
                 h: oldDetection.h,
                 classId: oldDetection.classId,
             }
-            return newLabel;
+            currentLabels.push(newLabel);
+            pushUndoState({ labels: currentLabels, saved: false });
+            selectLabel(currentLabels.length - 1);
+            showStatus('Detection added as label', false);
+            showDiscardChangesText();
         }
 
         function pushUndoState(state) {
@@ -1838,7 +1854,7 @@
                 const y = Math.min(startPos.y, currentPos.y);
                 const width = Math.abs(currentPos.x - startPos.x);
                 const height = Math.abs(currentPos.y - startPos.y);
-                
+
                 const containerWidthRatio = (parseFloat($('.bounding-box-container').css('width')) || canvas.offsetWidth) / imageelem.naturalWidth;
                 const containerHeightRatio = (parseFloat($('.bounding-box-container').css('height')) || canvas.offsetHeight) / imageelem.naturalHeight;
 
@@ -1953,11 +1969,7 @@
                     if (e.altKey && !e.ctrlKey) {
                         e.preventDefault();
                         if (selectedDetectionIndex !== -1) {
-                            currentLabels.push(copyDetectionToLabel(currentDetections[selectedDetectionIndex]));
-                            pushUndoState({ labels: currentLabels, saved: false });
-                            selectLabel(currentLabels.length - 1);
-                            showStatus('Detection added as label', false);
-                            showDiscardChangesText();
+                            copyDetectionToLabel(selectedDetectionIndex);
                         }
                     }
                 case 'A': // Shift+A, not (Shift+Alt+A or Shift+Ctrl+A)
