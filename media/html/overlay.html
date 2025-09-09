@@ -72,11 +72,24 @@
 
         .bounding-box-container .bounding-box {
             position: absolute;
-            border: 2px solid;
             box-sizing: border-box;
             pointer-events: none;
             z-index: inherit;
             background-color: transparent;
+        }
+
+        .bounding-box-container .bounding-box[id*="label"] {
+            border: 2px solid;
+        }
+
+        .bounding-box-container .bounding-box[id*="detection"] {
+            opacity: 0.5;
+            border: 2px dotted;
+        }
+        
+        .bounding-box-container .bounding-box[id*="detection"].selected {
+            opacity: 0.8;
+            border: 2px dashed;
         }
 
         .bounding-box-container .bounding-box.selected {
@@ -607,6 +620,8 @@
         let originalLabel = null;
         const handleSize = 10;
         const newClassColor = 'rgba(255, 255, 68, 1)';
+        const detectionBgColorLight = 'rgba(255, 255, 255, 0.6)';
+        const detectionBgColorDark = 'rgba(0, 0, 0, 0.6)';
         const unsetResizing = (e) => {
             if (isResizing) {
                 isResizing = false;
@@ -624,8 +639,8 @@
         // Zoom state
         let zoomLevel = 1.0;
         let panStartPos = null;
-        const minZoom = 1.0;
-        const maxZoom = 5.0;
+        let minZoom = 1.0;
+        let maxZoom = 5.0;
         const zoomStep = 0.1;
         let fontSize = 12;
         let mousePosBeforeZoom = { x: 0, y: 0 };
@@ -663,6 +678,8 @@
             panStartPos = null;
             panStartOffset = null;
             fontSize = settings ? settings.ui.fontSize : fontSize;
+            minZoom = settings ? settings.ui.minZoom : minZoom;
+            maxZoom = settings ? settings.ui.maxZoom : maxZoom;
             mousePosBeforeZoom = { x: 0, y: 0 };
         }
 
@@ -767,17 +784,17 @@
 
             const isLabel = parentId === 'canvasLabelBoxContainer';
             const boxId = drawCSSBox(`#${parentId}`, isLabel, label.classId, index, x, y, width, height, isSelected);
-
-            // Draw dots at all four corners
-            let dotColor = (label.classId >= 0 && label.classId < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
-            dotColor = dotColor.replace(', 1)', ', 0.9)');
-            let dotRadius = 5;
-            drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tl`, dotColor);
-            drawDot(`#${boxId}`, 1, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tr`, dotColor);
-            drawDot(`#${boxId}`, 2, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_bl`, dotColor);
-            drawDot(`#${boxId}`, 3, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_br`, dotColor);
-
+            
             if (isLabel) {
+                // Draw dots at all four corners
+                let dotColor = (label.classId >= 0 && label.classId < classNames.length && classColorNames[label.classId]) ? classColorNames[label.classId] : newClassColor;
+                dotColor = dotColor.replace(', 1)', ', 0.9)');
+                let dotRadius = 5;
+                drawDot(`#${boxId}`, 0, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tl`, dotColor);
+                drawDot(`#${boxId}`, 1, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_tr`, dotColor);
+                drawDot(`#${boxId}`, 2, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_bl`, dotColor);
+                drawDot(`#${boxId}`, 3, dotRadius, `dot_${isLabel ? 'label' : 'detect'}_${index}_br`, dotColor);
+
                 // Draw markers at all the four corners and midpoints of sides
                 dotRadius -= 1;
                 drawMarker(`#${boxId}`, 0, dotRadius, `marker_label_${index}_tl`);
@@ -990,8 +1007,8 @@
                 .text(text)
                 .css({
                     'font-size': `${fontSize}px`,
-                    color: `${isLightColor(color) ? "black" : "white"}`,
-                    backgroundColor: color
+                    color: isLabel ? `${isLightColor(color) ? "black" : "white"}` : color,
+                    backgroundColor: isLabel ? color : (isLightColor(color) ? detectionBgColorDark : detectionBgColorLight)
                 });
             // Add to container first to calculate dimensions
             $(containerId).append(labelClassElem);
@@ -1560,6 +1577,18 @@
             return JSON.parse(JSON.stringify(obj));
         }
 
+        function copyDetectionToLabel(oldDetection) {
+            oldDetection = deepCopyObj(oldDetection);
+            const newLabel = {
+                cx: oldDetection.cx,
+                cy: oldDetection.cy,
+                w: oldDetection.w,
+                h: oldDetection.h,
+                classId: oldDetection.classId,
+            }
+            return newLabel;
+        }
+
         function pushUndoState(state) {
             undoStates.splice(Math.min(undoStates.length, ++undoIndex));
             undoStates.push(deepCopyObj(state));
@@ -1735,9 +1764,13 @@
                 if (e.target.id.search('marker') === -1) { // Not a marker
                     // Select existing label
                     const clickedIndex = findLabelAtPosition(mouseX, mouseY);
+                    const clickedDetectionIndex = findDetectionAtPosition(mouseX, mouseY);
                     switch (clickedIndex) {
                         case -1:
                             unSelectLabel();
+                            if (clickedDetectionIndex !== -1) {
+                                selectDetection(clickedDetectionIndex);
+                            }
                             break;
                         case selectedLabelIndex:
                             isInMoveBoxMode = true;
@@ -1892,12 +1925,43 @@
             return retLabelIndex;
         }
 
+        function findDetectionAtPosition(x, y) {
+            var retDetectionIndex = -1;
+            var minArea = Number.MAX_SAFE_INTEGER;
+            for (let i = currentDetections.length - 1; i >= 0; i--) {
+                const detection = currentDetections[i];
+                const lx = (detection.cx - detection.w / 2) * canvas.width;
+                const ly = (detection.cy - detection.h / 2) * canvas.height;
+                const lw = detection.w * canvas.width;
+                const lh = detection.h * canvas.height;
+
+                if (x >= lx && x <= lx + lw && y >= ly && y <= ly + lh) {
+                    const newArea = lw * lh;
+                    if (newArea < minArea) {
+                        minArea = newArea;
+                        retDetectionIndex = i;
+                    }
+                }
+            }
+            return retDetectionIndex;
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             switch (e.key) {
-                case 'a':
-                case 'A':
-                    if (!e.ctrlKey) {
+                case 'a': // Alt+a, not Alt+Shift+a
+                    if (e.altKey && !e.ctrlKey) {
+                        e.preventDefault();
+                        if (selectedDetectionIndex !== -1) {
+                            currentLabels.push(copyDetectionToLabel(currentDetections[selectedDetectionIndex]));
+                            pushUndoState({ labels: currentLabels, saved: false });
+                            selectLabel(currentLabels.length - 1);
+                            showStatus('Detection added as label', false);
+                            showDiscardChangesText();
+                        }
+                    }
+                case 'A': // Shift+A, not (Shift+Alt+A or Shift+Ctrl+A)
+                    if (!e.ctrlKey && !e.altKey) {
                         e.preventDefault();
                         addLabelBtn.click();
                     }

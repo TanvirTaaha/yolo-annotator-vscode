@@ -53,6 +53,14 @@ export class SettingsManager {
     static getMaxUndoLength(): number {
         return this.getConfig('ui.maxUndoLength', 50);
     }
+    
+    static getMinZoom(): number {
+        return this.getConfig('ui.minZoom', 0.5);
+    }
+    
+    static getMaxZoom(): number {
+        return this.getConfig('ui.maxZoom', 5);
+    }
     /**
      * Get all settings as an object
      */
@@ -66,7 +74,9 @@ export class SettingsManager {
             ui: {
                 showShortcutsHelp: this.getShowShortcutsHelp(),
                 fontSize: this.getFontSize(),
-                maxUndoLength: this.getMaxUndoLength()
+                maxUndoLength: this.getMaxUndoLength(),
+                minZoom: this.getMinZoom(),
+                maxZoom: this.getMaxZoom()
             }
         };
     }

@@ -2,7 +2,7 @@
   "name": "yolo-annotator",
   "displayName": "YOLO Annotator",
   "description": "Visual annotation tool for YOLO object detection datasets",
-  "version": "2.4.7",
+  "version": "2.5.0",
   "publisher": "TanvirTaaha",
   "author": {
     "name": "Tanvir Hossain Taaha",
@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/TanvirTaaha/yolo-annotator-vscode#readme",
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "Machine Learning",
@@ -93,6 +93,22 @@
           "maximum": 500,
           "description": "Maximum length of states to store for undo/redo",
           "scope": "resource"
+        },
+        "yoloAnnotator.ui.minZoom": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0.01,
+          "maximum": 1,
+          "description": "Minimum zoom level",
+          "scope": "resource"
+        },
+        "yoloAnnotator.ui.maxZoom": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum zoom level",
+          "scope": "resource"
         }
       }
     },
@@ -145,7 +161,7 @@
     "@types/mocha": "^10.0.10",
     "@types/natural-compare-lite": "^1.4.2",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/test-cli": "^0.0.10",
