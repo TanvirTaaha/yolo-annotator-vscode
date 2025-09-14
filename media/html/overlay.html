@@ -600,6 +600,8 @@
         let selectedLabelIndex = -1;
         let currentDetections = [];
         let selectedDetectionIndex = -1;
+        let showLabels = true;
+        let showDetections = true;
         let showConfidenceScore = true;
         let isDrawing = false;
         let drawingMode = false;
@@ -758,11 +760,17 @@
             });
 
             $('#labelVisCheckbox')
-                .prop('checked', true)
-                .click(() => $('#canvasLabelBoxContainer').toggleClass('hidden', !$('#labelVisCheckbox').prop('checked')));
+                .prop('checked', showLabels)
+                .click(() => {
+                    $('#canvasLabelBoxContainer').toggleClass('hidden', !$('#labelVisCheckbox').prop('checked'));
+                    showLabels = $('#labelVisCheckbox').prop('checked');
+                });
             $('#detectVisCheckbox')
-                .prop('checked', true)
-                .click(() => $('#canvasDetectionBoxContainer').toggleClass('hidden', !$('#detectVisCheckbox').prop('checked')));
+                .prop('checked', showDetections)
+                .click(() => {
+                    $('#canvasDetectionBoxContainer').toggleClass('hidden', !$('#detectVisCheckbox').prop('checked'));
+                    showDetections = $('#detectVisCheckbox').prop('checked');
+                });
             $('#detectShowConfCheckbox')
                 .prop('checked', showConfidenceScore)
                 .click(() => {
