@@ -1971,6 +1971,7 @@
                         e.preventDefault();
                         if (selectedDetectionIndex !== -1) {
                             copyDetectionToLabel(selectedDetectionIndex);
+                            unSelectDetection();
                         }
                     }
                     if (!e.ctrlKey && !e.altKey && !e.shiftKey) { // only a is allowed
