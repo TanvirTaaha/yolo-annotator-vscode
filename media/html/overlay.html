@@ -1965,15 +1965,15 @@
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             switch (e.key) {
-                case 'a': // Alt+a, not Alt+Shift+a
-                    if (e.altKey && !e.ctrlKey) {
+                case 'a':
+                case 'A':
+                    if (!e.ctrlKey && e.altKey && !e.shiftKey) { // only alt+a is allowed
                         e.preventDefault();
                         if (selectedDetectionIndex !== -1) {
                             copyDetectionToLabel(selectedDetectionIndex);
                         }
                     }
-                case 'A': // Shift+A, not (Shift+Alt+A or Shift+Ctrl+A)
-                    if (!e.ctrlKey && !e.altKey) {
+                    if (!e.ctrlKey && !e.altKey && !e.shiftKey) { // only a is allowed
                         e.preventDefault();
                         addLabelBtn.click();
                     }
