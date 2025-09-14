@@ -1980,7 +1980,8 @@
                     }
                     break;
                 case 's':
-                    if (e.ctrlKey) {
+                case 'S':
+                    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         saveBtn.click();
                     }
@@ -2017,35 +2018,35 @@
                     }
                     break;
                 case 'z':
-                    if (e.ctrlKey) {
+                    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         undo();
                     }
                     break;
                 case 'y': // Alternate redo shortcut
                 case 'Z': // Shift+z
-                    if (e.ctrlKey) {
+                    if (e.ctrlKey && e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         redo();
                     }
                     break;
                 case 'x':
                 case 'X': // Shift+v
-                    if (e.ctrlKey) {
+                    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         cutLabel();
                     }
                     break;
                 case 'c':
                 case 'C': // Shift+c
-                    if (e.ctrlKey) {
+                    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         copyLabel();
                     }
                     break;
                 case 'v':
                 case 'V': // Shift+v
-                    if (e.ctrlKey) {
+                    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                         e.preventDefault();
                         pasteLabel();
                     }
