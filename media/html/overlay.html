@@ -549,7 +549,7 @@
         <div class="shortcut-item"><span class="shortcut-key">Shift+Ctrl+scroll</span>: Fast zoom in/out</div>
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+z</span>: Undo</div>
         <div class="shortcut-item"><span class="shortcut-key">Ctrl+Shift+z</span>: Redo</div>
-        <div class="shortcut-item"><span class="shortcut-key">Ctrl+A</span>: Add detection as label</div>
+        <div class="shortcut-item"><span class="shortcut-key">Alt+A</span>: Add detection as label</div>
         <div class="shortcut-help-text"><span>Hide this menu in VSCode Settings</span></div>
     </div>
 
@@ -1449,15 +1449,17 @@
         }
 
         function zoomIn(event, slow = false) {
+            console.log('zoomIn triggered');
             if (zoomLevel < maxZoom) {
-                zoomLevel = Math.min(maxZoom, zoomLevel + (slow ? zoomStep / 10 : zoomStep));
+                zoomLevel = Math.min(maxZoom, zoomLevel * (1 + (slow ? zoomStep / 2 : zoomStep)));
                 updateZoom(event);
             }
         }
 
         function zoomOut(event, slow = false) {
+            console.log('zoomOut triggered');
             if (zoomLevel > minZoom) {
-                zoomLevel = Math.max(minZoom, zoomLevel - (slow ? zoomStep / 10 : zoomStep));
+                zoomLevel = Math.max(minZoom, zoomLevel / (1 + (slow ? zoomStep / 2 : zoomStep)));
                 updateZoom(event);
             }
         }
@@ -1899,14 +1901,21 @@
         zoomOutBtn.addEventListener('click', zoomOut);
         zoomLevelDisplay.addEventListener('dblclick', resetZoom);
         // Mouse wheel zoom
+        
+        let wheelZoomStarted = 0;
+        let wheelZoomDebounce = 30;
         window.addEventListener('wheel', (e) => {
             if (!e.ctrlKey) return;
+            if (Date.now() - wheelZoomStarted < wheelZoomDebounce) return;
+            wheelZoomStarted = Date.now();
             e.preventDefault();
+            console.log(`e.deltaY:${e.deltaY}`);
             if (e.deltaY < 0) {
-                zoomIn(e, !e.shiftKey && Math.abs(e.deltaY) < 100);
+                zoomIn(e, !e.shiftKey);
             } else {
-                zoomOut(e, !e.shiftKey && Math.abs(e.deltaY) < 100);
+                zoomOut(e, !e.shiftKey);
             }
+            console.log(`zoomLevel:${zoomLevel}`);
         }, { passive: false });
 
         function processLables(loadedLabels, loadedClasses, loadedColors) {
